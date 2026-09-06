@@ -40,6 +40,14 @@ function initialize() {
       if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
         privateKey = privateKey.slice(1, -1).trim();
       }
+      if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+        try {
+          const decoded = Buffer.from(privateKey, 'base64').toString('utf8');
+          if (decoded.includes('-----BEGIN PRIVATE KEY-----')) {
+            privateKey = decoded.trim();
+          }
+        } catch (_) {}
+      }
       privateKey = privateKey.replace(/\\n/g, '\n');
 
       admin.initializeApp({
