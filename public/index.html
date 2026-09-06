@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="LostLink - VIT Campus Lost and Found">
+  <title>LostLink</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+  <!-- Immediate Gatekeeper Redirection -->
+  <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg-secondary); text-align: center; padding: var(--space-6);">
+    <div>
+      <h1 style="font-family: var(--font-heading); font-size: 2rem; font-weight: 800; color: var(--gray-900); margin-bottom: 8px;">LostLink</h1>
+      <div class="loading-spinner" style="margin: 0 auto 16px;"></div>
+      <p class="text-secondary text-sm">Checking authentication status...</p>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/utils.js"></script>
+  <script src="js/firebase-config.js"></script>
+</body>
+</html>

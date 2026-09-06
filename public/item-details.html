@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Item Details - LostLink">
+  <title>Item Details - LostLink</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="find-items.html" class="nav-brand">LostLink</a>
+
+      <ul class="nav-menu" id="navMenu">
+        <li><a href="find-items.html" class="nav-link">Find My Item</a></li>
+        <li><a href="report-lost.html" class="nav-link">Report Lost</a></li>
+        <li><a href="report-found.html" class="nav-link">Report Found</a></li>
+        <li><a href="ai-assistant.html" class="nav-link">AI Assistant</a></li>
+        <li class="nav-user">
+          <a href="profile.html" class="nav-link">Profile</a>
+        </li>
+        <li class="nav-user">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="LostLink.logout()">Logout</button>
+        </li>
+      </ul>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">Menu</button>
+    </div>
+  </nav>
+
+  <main class="container" style="padding-top: var(--space-8); padding-bottom: var(--space-12);">
+    <div style="margin-bottom: var(--space-4);">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="history.back()">Back</button>
+    </div>
+
+    <div id="itemDetailContainer">
+      <div style="text-align: center; padding: 50px;">
+        <div class="loading-spinner" style="margin: 0 auto 12px;"></div>
+        <p class="text-secondary text-sm">Loading item details...</p>
+      </div>
+    </div>
+  </main>
+
+  <footer class="simple-site-footer">
+    <div class="footer-container">
+      <p>Done by Sanjay Guptha R S 24MIS0461<br>Thirukumaran K 24MIS0471<br>Keerthivarman G 24MIS0456</p>
+    </div>
+  </footer>
+
+  <!-- Contact Modal -->
+  <div id="contactModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Send Contact Request</h3>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeContactModal()">&times;</button>
+      </div>
+      <p class="modal-desc">
+        Send a note to the student who reported this item. When accepted, phone numbers will be exchanged securely.
+      </p>
+      <form id="contactForm" onsubmit="event.preventDefault(); submitContactRequest();">
+        <div class="form-group">
+          <label for="contactMessage" class="form-label">Message / Identifying Details</label>
+          <textarea id="contactMessage" class="form-input" rows="3" placeholder="Explain how you can identify this item or arrange handoff" required></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline btn-sm" onclick="closeContactModal()">Cancel</button>
+          <button type="submit" id="sendReqBtn" class="btn btn-primary btn-sm">Send Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/utils.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/matches.js"></script>
+</body>
+</html>

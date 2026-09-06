@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Find My Item - LostLink">
+  <title>Find My Item - LostLink</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="find-items.html" class="nav-brand">LostLink</a>
+
+      <ul class="nav-menu" id="navMenu">
+        <li><a href="find-items.html" class="nav-link nav-link-primary active">Find My Item</a></li>
+        <li><a href="report-lost.html" class="nav-link">Report Lost</a></li>
+        <li><a href="report-found.html" class="nav-link">Report Found</a></li>
+        <li><a href="ai-assistant.html" class="nav-link">AI Assistant</a></li>
+        <li class="nav-user">
+          <a href="profile.html" class="nav-link">Profile</a>
+        </li>
+        <li class="nav-user">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="LostLink.logout()">Logout</button>
+        </li>
+      </ul>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">Menu</button>
+    </div>
+  </nav>
+
+  <main class="container" style="padding-top: var(--space-8); padding-bottom: var(--space-12);">
+    
+    <!-- Primary Search Card -->
+    <section class="search-hero-box">
+      <h1 class="search-main-heading">What did you lose?</h1>
+      
+      <form id="searchForm" onsubmit="event.preventDefault(); performSearch();">
+        <div class="search-input-group">
+          <textarea 
+            id="searchQuery" 
+            class="natural-search-textarea" 
+            rows="3" 
+            placeholder="Describe your lost item in your own words (e.g. I lost my black purse near SJT yesterday evening with a silver chain)"
+            required
+          ></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: var(--space-3);">
+          <button type="submit" id="searchBtn" class="btn btn-primary btn-lg">
+            Find Matches
+          </button>
+        </div>
+      </form>
+
+      <!-- Optional Filters: Location, Colour, Date only -->
+      <div class="compact-filters-bar">
+        <span class="filter-label">Optional Filters:</span>
+        <div class="filters-wrap">
+          <input type="text" id="filterLocation" class="form-input filter-field" placeholder="Location (e.g. SJT, TT, Library)">
+          <input type="text" id="filterColor" class="form-input filter-field" placeholder="Colour">
+          <input type="date" id="filterDate" class="form-input filter-field">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Search Results Section (Shown upon search) -->
+    <section id="searchResultsSection" class="dashboard-community-section hidden" style="margin-bottom: var(--space-10);">
+      <div class="section-title-bar">
+        <div class="section-title-group">
+          <h2 class="section-heading" id="searchResultsHeading">Matching Found Items</h2>
+          <span id="searchResultsCount" class="badge badge-primary"></span>
+        </div>
+        <button type="button" class="btn btn-ghost btn-xs" onclick="dismissSearchResults()">Close Results &times;</button>
+      </div>
+      <div id="searchResultsContainer" class="items-grid"></div>
+    </section>
+
+    <!-- Campus Reports: Found Reports Section -->
+    <section id="foundReportsSection" class="dashboard-community-section" style="margin-bottom: var(--space-10);">
+      <div class="section-title-bar">
+        <div class="section-title-group">
+          <h2 class="section-heading">Found Reports</h2>
+          <span id="foundCountBadge" class="badge badge-success"></span>
+        </div>
+        <p class="section-subtitle">Real items reported as found by campus students</p>
+      </div>
+      <div id="foundContainer" class="items-grid">
+        <div class="search-loading-state" style="grid-column: 1 / -1; padding: var(--space-8); text-align: center;">
+          <div class="loading-spinner"></div>
+          <p class="text-secondary text-sm" style="margin-top: var(--space-2);">Loading found reports...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Campus Reports: Lost Reports Section -->
+    <section id="lostReportsSection" class="dashboard-community-section" style="margin-bottom: var(--space-10);">
+      <div class="section-title-bar">
+        <div class="section-title-group">
+          <h2 class="section-heading">Lost Reports</h2>
+          <span id="lostCountBadge" class="badge badge-warning"></span>
+        </div>
+        <p class="section-subtitle">Real items reported as lost by campus students</p>
+      </div>
+      <div id="lostContainer" class="items-grid">
+        <div class="search-loading-state" style="grid-column: 1 / -1; padding: var(--space-8); text-align: center;">
+          <div class="loading-spinner"></div>
+          <p class="text-secondary text-sm" style="margin-top: var(--space-2);">Loading lost reports...</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="simple-site-footer">
+    <div class="footer-container">
+      <p>Done by Sanjay Guptha R S 24MIS0461<br>Thirukumaran K 24MIS0471<br>Keerthivarman G 24MIS0456</p>
+    </div>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/utils.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/search.js"></script>
+</body>
+</html>

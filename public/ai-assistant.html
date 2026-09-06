@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AI Assistant - LostLink">
+  <title>AI Assistant - LostLink</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="find-items.html" class="nav-brand">LostLink</a>
+
+      <ul class="nav-menu" id="navMenu">
+        <li><a href="find-items.html" class="nav-link">Find My Item</a></li>
+        <li><a href="report-lost.html" class="nav-link">Report Lost</a></li>
+        <li><a href="report-found.html" class="nav-link">Report Found</a></li>
+        <li><a href="ai-assistant.html" class="nav-link active">AI Assistant</a></li>
+        <li class="nav-user">
+          <a href="profile.html" class="nav-link">Profile</a>
+        </li>
+        <li class="nav-user">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="LostLink.logout()">Logout</button>
+        </li>
+      </ul>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">Menu</button>
+    </div>
+  </nav>
+
+  <main class="container" style="padding-top: var(--space-8); padding-bottom: var(--space-12);">
+    <div class="chat-window">
+      <div class="chat-header-bar">
+        <h2 class="chat-title">Campus Assistant</h2>
+        <span class="chat-status-text">Available</span>
+      </div>
+
+      <!-- Messages Stream -->
+      <div class="chat-messages" id="chatStream">
+        <div class="chat-bubble bubble-assistant">
+          <p style="margin: 0 0 6px;"><strong>Welcome to LostLink Assistant.</strong></p>
+          <p style="margin: 0;">I can assist you with guidance on where items are deposited on campus (such as SJT or Library security counters), how to describe an item clearly, or how to locate a lost possession.</p>
+        </div>
+      </div>
+
+      <!-- Suggested Prompts -->
+      <div class="suggested-prompts-bar">
+        <button type="button" class="prompt-pill" onclick="sendSuggestedPrompt('Where are lost ID cards usually deposited on campus?')">
+          Where do lost ID cards go?
+        </button>
+        <button type="button" class="prompt-pill" onclick="sendSuggestedPrompt('How should I describe my lost backpack for best results?')">
+          How to describe a lost item
+        </button>
+        <button type="button" class="prompt-pill" onclick="sendSuggestedPrompt('What should I do if I found a phone in SJT?')">
+          Found an item in SJT?
+        </button>
+      </div>
+
+      <!-- Input Bar -->
+      <form id="chatForm" class="chat-input-bar" onsubmit="event.preventDefault(); handleUserMessage();">
+        <input 
+          type="text" 
+          id="chatInput" 
+          class="chat-input" 
+          placeholder="Type your question about campus lost and found..."
+          autocomplete="off"
+          required
+        >
+        <button type="submit" id="chatSendBtn" class="btn btn-primary" style="padding: 0 20px;">
+          Send
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <footer class="simple-site-footer">
+    <div class="footer-container">
+      <p>Done by Sanjay Guptha R S 24MIS0461<br>Thirukumaran K 24MIS0471<br>Keerthivarman G 24MIS0456</p>
+    </div>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/utils.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/assistant.js"></script>
+</body>
+</html>

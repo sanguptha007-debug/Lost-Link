@@ -1,0 +1,35 @@
+{
+  "name": "lostlink",
+  "version": "1.0.0",
+  "description": "LostLink — AI-Powered Lost & Found Assistant for VIT Students",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js",
+    "seed": "node server/seed.js"
+  },
+  "keywords": [
+    "lost-and-found",
+    "ai",
+    "gemini",
+    "vit",
+    "campus",
+    "firebase"
+  ],
+  "author": "LostLink Team",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@supabase/supabase-js": "^2.115.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "firebase-admin": "^13.0.2",
+    "helmet": "^8.0.0",
+    "multer": "^1.4.5-lts.1",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

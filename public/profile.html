@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Profile - LostLink">
+  <title>Profile - LostLink</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="find-items.html" class="nav-brand">LostLink</a>
+
+      <ul class="nav-menu" id="navMenu">
+        <li><a href="find-items.html" class="nav-link">Find My Item</a></li>
+        <li><a href="report-lost.html" class="nav-link">Report Lost</a></li>
+        <li><a href="report-found.html" class="nav-link">Report Found</a></li>
+        <li><a href="ai-assistant.html" class="nav-link">AI Assistant</a></li>
+        <li class="nav-user">
+          <a href="profile.html" class="nav-link active">Profile</a>
+        </li>
+        <li class="nav-user">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="LostLink.logout()">Logout</button>
+        </li>
+      </ul>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">Menu</button>
+    </div>
+  </nav>
+
+  <main class="container" style="padding-top: var(--space-8); padding-bottom: var(--space-12);">
+    <div class="profile-grid">
+      
+      <!-- Student Profile Card -->
+      <aside class="student-card">
+        <h2 id="cardStudentName" class="student-name">Student</h2>
+        <div class="reg-no-badge" id="cardRegNo">VIT STUDENT</div>
+
+        <div class="profile-details-box">
+          <div class="detail-row">
+            <span class="detail-label">Email:</span>
+            <span id="cardEmail" class="detail-value">...</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Phone:</span>
+            <span id="cardPhone" class="detail-value">...</span>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-outline btn-sm btn-block" onclick="openEditProfileModal()">
+          Edit Contact Info
+        </button>
+        <button type="button" class="btn btn-ghost btn-xs btn-block" onclick="LostLink.logout()" style="margin-top: 8px;">
+          Sign Out
+        </button>
+      </aside>
+
+      <!-- Main Tabs Section -->
+      <section>
+        <div class="tab-nav">
+          <button type="button" class="tab-btn active" onclick="switchTab('reportsTab', this)">
+            My Reports (<span id="reportsCount">0</span>)
+          </button>
+          <button type="button" class="tab-btn" onclick="switchTab('receivedTab', this)">
+            Received Inquiries (<span id="receivedCount">0</span>)
+          </button>
+          <button type="button" class="tab-btn" onclick="switchTab('sentTab', this)">
+            Sent Inquiries (<span id="sentCount">0</span>)
+          </button>
+        </div>
+
+        <!-- Tab 1: My Reports -->
+        <div id="reportsTab" class="tab-pane">
+          <div id="myReportsList" class="items-grid">
+            <div style="grid-column: 1 / -1; text-align: center; padding: 30px;">
+              <p class="text-secondary text-sm">Loading your reports...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Received Requests -->
+        <div id="receivedTab" class="tab-pane hidden">
+          <div id="receivedList"></div>
+        </div>
+
+        <!-- Tab 3: Sent Requests -->
+        <div id="sentTab" class="tab-pane hidden">
+          <div id="sentList"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="simple-site-footer">
+    <div class="footer-container">
+      <p>Done by Sanjay Guptha R S 24MIS0461<br>Thirukumaran K 24MIS0471<br>Keerthivarman G 24MIS0456</p>
+    </div>
+  </footer>
+
+  <!-- Edit Profile Modal -->
+  <div id="editProfileModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Edit Contact Info</h3>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeEditProfileModal()">&times;</button>
+      </div>
+
+      <form id="editProfileForm" onsubmit="event.preventDefault(); submitProfileUpdate();">
+        <div class="form-group" style="margin-bottom: var(--space-3);">
+          <label for="editName" class="form-label">Full Name</label>
+          <input type="text" id="editName" class="form-input" required>
+        </div>
+
+        <div class="form-group" style="margin-bottom: var(--space-3);">
+          <label for="editRegNo" class="form-label">Registration Number</label>
+          <input type="text" id="editRegNo" class="form-input uppercase" required>
+        </div>
+
+        <div class="form-group" style="margin-bottom: var(--space-4);">
+          <label for="editPhone" class="form-label">Phone Number (Mandatory)</label>
+          <input type="tel" id="editPhone" class="form-input" required>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline btn-sm" onclick="closeEditProfileModal()">Cancel</button>
+          <button type="submit" id="saveProfileBtn" class="btn btn-primary btn-sm">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/utils.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/profile.js"></script>
+</body>
+</html>

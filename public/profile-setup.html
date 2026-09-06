@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Complete Profile - LostLink">
+  <title>Complete Profile - LostLink</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/auth.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body class="auth-body">
+
+  <div class="auth-page">
+    <div class="auth-brand">
+      <div class="auth-brand-content">
+        <h1 class="brand-title">LostLink</h1>
+        <p class="brand-desc">Complete your student profile to report items and coordinate returns with other students.</p>
+      </div>
+    </div>
+
+    <div class="auth-form-panel">
+      <div class="auth-card">
+        <div class="auth-header">
+          <h2>Profile Setup</h2>
+          <p>Please provide your contact information before accessing LostLink.</p>
+        </div>
+
+        <form id="profileSetupForm" novalidate>
+          <div class="form-group">
+            <label for="setupEmail" class="form-label">VIT Student Email</label>
+            <input type="email" id="setupEmail" class="form-input input-readonly" readonly>
+          </div>
+
+          <div class="form-group">
+            <label for="setupName" class="form-label">Full Name</label>
+            <input type="text" id="setupName" class="form-input" required placeholder="Enter your full name">
+          </div>
+
+          <div class="form-group">
+            <label for="setupPhone" class="form-label">Phone Number (Mandatory)</label>
+            <input type="tel" id="setupPhone" class="form-input" required placeholder="10-digit mobile number">
+          </div>
+
+          <div class="form-group">
+            <label for="setupRegNo" class="form-label">Registration Number</label>
+            <input type="text" id="setupRegNo" class="form-input uppercase" required placeholder="e.g. 21BCE1234">
+          </div>
+
+          <div id="setupAlert" class="auth-alert hidden"></div>
+
+          <button type="submit" id="setupSubmitBtn" class="btn btn-primary btn-block btn-lg" style="margin-top: var(--space-4);">
+            Save and Continue
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+ 
+  <footer class="simple-site-footer">
+    <div class="footer-container">
+      <p>Done by Sanjay Guptha R S 24MIS0461<br>Thirukumaran K 24MIS0471<br>Keerthivarman G 24MIS0456</p>
+    </div>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/utils.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const emailInput = document.getElementById('setupEmail');
+      const nameInput = document.getElementById('setupName');
+      const regNoInput = document.getElementById('setupRegNo');
+      const phoneInput = document.getElementById('setupPhone');
+      const form = document.getElementById('profileSetupForm');
+      const alertEl = document.getElementById('setupAlert');
+      const submitBtn = document.getElementById('setupSubmitBtn');
+
+      function showAlert(msg) {
+        alertEl.textContent = msg;
+        alertEl.classList.remove('hidden');
+      }
+
+      function populate(user) {
+        if (!user) return;
+        emailInput.value = user.email || '';
+        nameInput.value = user.name || '';
+
+        const extracted = LostLink.extractVitRegNo(user.email || '');
+        if (extracted) {
+          regNoInput.value = extracted;
+        } else if (user.registrationNumber) {
+          regNoInput.value = user.registrationNumber;
+        }
+
+        if (user.phone) phoneInput.value = user.phone;
+
+        if (user.profileComplete) {
+          window.location.href = '/find-items.html';
+        }
+      }
+
+      document.addEventListener('authStateChanged', (e) => {
+        const user = e.detail?.user;
+        if (!user) {
+          window.location.href = '/login.html';
+        } else {
+          populate(user);
+        }
+      });
+
+      if (LostLink.currentUser) {
+        populate(LostLink.currentUser);
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        alertEl.classList.add('hidden');
+
+        const name = nameInput.value.trim();
+        const phone = phoneInput.value.trim();
+        const regNo = regNoInput.value.trim().toUpperCase();
+
+        if (!name) {
+          showAlert('Please enter your name.');
+          return;
+        }
+
+        const phoneErr = LostLink.validatePhone(phone);
+        if (phoneErr) {
+          showAlert(phoneErr);
+          return;
+        }
+
+        if (!regNo) {
+          showAlert('Please enter your registration number.');
+          return;
+        }
+
+        LostLink.setLoading(submitBtn, true, 'Saving...');
+
+        try {
+          const res = await LostLink.api('/api/users/profile-setup', {
+            method: 'POST',
+            body: JSON.stringify({
+              name,
+              phone,
+              registrationNumber: regNo
+            })
+          });
+
+          if (res.success) {
+            window.location.href = '/find-items.html';
+          } else {
+            showAlert(res.error || 'Failed to complete profile.');
+            LostLink.setLoading(submitBtn, false);
+          }
+        } catch (err) {
+          showAlert(err.message || 'Service is temporarily unavailable. Please try again later.');
+          LostLink.setLoading(submitBtn, false);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

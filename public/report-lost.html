@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Report Lost Item - LostLink">
+  <title>Report Lost Item - LostLink</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="find-items.html" class="nav-brand">LostLink</a>
+
+      <ul class="nav-menu" id="navMenu">
+        <li><a href="find-items.html" class="nav-link">Find My Item</a></li>
+        <li><a href="report-lost.html" class="nav-link active">Report Lost</a></li>
+        <li><a href="report-found.html" class="nav-link">Report Found</a></li>
+        <li><a href="ai-assistant.html" class="nav-link">AI Assistant</a></li>
+        <li class="nav-user">
+          <a href="profile.html" class="nav-link">Profile</a>
+        </li>
+        <li class="nav-user">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="LostLink.logout()">Logout</button>
+        </li>
+      </ul>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">Menu</button>
+    </div>
+  </nav>
+
+  <main class="container" style="padding-top: var(--space-8); padding-bottom: var(--space-12);">
+    <div style="margin-bottom: var(--space-4); display: flex; justify-content: flex-end;">
+      <a href="find-items.html?tab=lost" class="btn btn-outline btn-sm">View Lost Reports &rarr;</a>
+    </div>
+
+    <div class="form-container-card">
+      <div class="form-header">
+        <h1>Report Lost Item</h1>
+        <p>Describe your missing item. The written description is the primary matching signal.</p>
+      </div>
+
+      <form id="reportLostForm" novalidate>
+        <!-- Description (Primary Field) -->
+        <div class="form-group">
+          <label for="itemDescription" class="form-label">Description (Primary Signal)</label>
+          <textarea 
+            id="itemDescription" 
+            class="form-input" 
+            rows="4" 
+            placeholder="Describe what you lost in detail (e.g. Black leather purse with silver chain and student ID inside, lost near SJT building)"
+            required
+          ></textarea>
+        </div>
+
+        <!-- Location -->
+        <div class="form-group">
+          <label for="itemLocation" class="form-label">Location Lost</label>
+          <input type="text" id="itemLocation" class="form-input" placeholder="e.g. SJT 412, Central Library, TT Foodys">
+          <label class="checkbox-inline" style="margin-top: 6px;">
+            <input type="checkbox" id="locationUnknown" onchange="toggleLocationUnknown(this)">
+            <span>Exact location unknown</span>
+          </label>
+        </div>
+
+        <!-- Date & Time -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="itemDate" class="form-label">Date Lost</label>
+            <input type="date" id="itemDate" class="form-input" required>
+          </div>
+
+          <div class="form-group">
+            <label for="itemTime" class="form-label">Optional Time</label>
+            <input type="time" id="itemTime" class="form-input">
+          </div>
+        </div>
+
+        <!-- Optional Photo (Supporting Verification) -->
+        <div class="form-group">
+          <label class="form-label">Optional Photo (Supporting Verification)</label>
+          <div class="photo-upload-box" onclick="document.getElementById('itemPhoto').click()">
+            <input type="file" id="itemPhoto" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewSelectedImage(this)">
+            <div id="photoPlaceholderText">
+              <span>Click to select an optional photo of your lost item (JPEG, PNG, WebP up to 5 MB)</span>
+            </div>
+            <img id="photoPreviewImg" class="photo-preview-img hidden" alt="Selected preview">
+          </div>
+        </div>
+
+        <div style="margin-top: var(--space-6);">
+          <button type="submit" id="submitLostBtn" class="btn btn-primary btn-block btn-lg">
+            Submit Lost Report
+          </button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <footer class="simple-site-footer">
+    <div class="footer-container">
+      <p>Done by Sanjay Guptha R S 24MIS0461<br>Thirukumaran K 24MIS0471<br>Keerthivarman G 24MIS0456</p>
+    </div>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/utils.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/report-lost.js"></script>
+</body>
+</html>

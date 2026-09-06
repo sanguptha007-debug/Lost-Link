@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="My Lost Reports - LostLink">
+  <title>My Lost Reports - LostLink</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="find-items.html" class="nav-brand">LostLink</a>
+
+      <ul class="nav-menu" id="navMenu">
+        <li><a href="find-items.html" class="nav-link">Find My Item</a></li>
+        <li><a href="report-lost.html" class="nav-link">Report Lost</a></li>
+        <li><a href="report-found.html" class="nav-link">Report Found</a></li>
+        <li><a href="my-lost-reports.html" class="nav-link active">My Lost Reports</a></li>
+        <li><a href="my-found-reports.html" class="nav-link">My Found Reports</a></li>
+        <li><a href="ai-assistant.html" class="nav-link">AI Assistant</a></li>
+        <li class="nav-user">
+          <a href="profile.html" class="nav-link">Profile</a>
+        </li>
+        <li class="nav-user">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="LostLink.logout()">Logout</button>
+        </li>
+      </ul>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">Menu</button>
+    </div>
+  </nav>
+
+  <main class="container" style="padding-top: var(--space-8); padding-bottom: var(--space-12);">
+    <!-- Page Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-6); flex-wrap: wrap; gap: var(--space-3);">
+      <div>
+        <h1 style="font-size: var(--text-2xl); font-weight: 700; color: var(--gray-900); margin: 0 0 4px;">My Lost Reports</h1>
+        <p style="color: var(--gray-600); font-size: var(--text-sm); margin: 0;">Items you reported as lost on campus and their current matching status against found reports.</p>
+      </div>
+      <div>
+        <a href="report-lost.html" class="btn btn-primary btn-sm">Report Another Lost Item</a>
+      </div>
+    </div>
+
+    <!-- Reports Container -->
+    <div id="lostReportsList" style="display: flex; flex-direction: column; gap: var(--space-4);">
+      <div style="text-align: center; padding: 50px;">
+        <div class="loading-spinner" style="margin: 0 auto 12px;"></div>
+        <p class="text-secondary text-sm">Loading your lost reports...</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/utils.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/my-lost-reports.js"></script>
+</body>
+</html>

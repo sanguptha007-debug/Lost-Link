@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper: Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+    
+    // Helper: Check if user owns the document
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+    
+    // Helper: Check if user is admin
+    function isAdmin() {
+      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isOwner(userId) || isAdmin();
+      // Users can create their own profile
+      allow create: if isOwner(userId);
+      // Users can update their own profile (not role)
+      allow update: if isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'email']);
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+    
+    // Items collection (lost/found reports)
+    match /items/{itemId} {
+      // Any authenticated user can read items
+      allow read: if isAuth();
+      // Any authenticated user can create items
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      // Only owner can update their items
+      allow update: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      // Only owner or admin can delete
+      allow delete: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    // Matches collection
+    match /matches/{matchId} {
+      // Involved users can read matches
+      allow read: if isAuth() && (resource.data.lostUserId == request.auth.uid || resource.data.foundUserId == request.auth.uid || isAdmin());
+      // Server creates matches (via Admin SDK), but allow authenticated writes
+      allow create: if isAuth();
+      // Involved users can update match status
+      allow update: if isAuth() && (resource.data.lostUserId == request.auth.uid || resource.data.foundUserId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+    
+    // Contact Requests collection
+    match /contactRequests/{requestId} {
+      // Involved users can read
+      allow read: if isAuth() && (resource.data.fromUserId == request.auth.uid || resource.data.toUserId == request.auth.uid || isAdmin());
+      // Authenticated users can create contact requests
+      allow create: if isAuth() && request.resource.data.fromUserId == request.auth.uid;
+      // Recipient can update status, both parties can resolve
+      allow update: if isAuth() && (resource.data.toUserId == request.auth.uid || resource.data.fromUserId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Report Found Item - LostLink">
+  <title>Report Found Item - LostLink</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="find-items.html" class="nav-brand">LostLink</a>
+
+      <ul class="nav-menu" id="navMenu">
+        <li><a href="find-items.html" class="nav-link">Find My Item</a></li>
+        <li><a href="report-lost.html" class="nav-link">Report Lost</a></li>
+        <li><a href="report-found.html" class="nav-link active">Report Found</a></li>
+        <li><a href="ai-assistant.html" class="nav-link">AI Assistant</a></li>
+        <li class="nav-user">
+          <a href="profile.html" class="nav-link">Profile</a>
+        </li>
+        <li class="nav-user">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="LostLink.logout()">Logout</button>
+        </li>
+      </ul>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">Menu</button>
+    </div>
+  </nav>
+
+  <main class="container" style="padding-top: var(--space-8); padding-bottom: var(--space-12);">
+    <div style="margin-bottom: var(--space-4); display: flex; justify-content: flex-end;">
+      <a href="find-items.html?tab=found" class="btn btn-outline btn-sm">View Found Reports &rarr;</a>
+    </div>
+
+    <div class="form-container-card">
+      <div class="form-header">
+        <h1>Report Found Item</h1>
+        <p>Report an item spotted or picked up on campus to help reconnect it with the owner.</p>
+      </div>
+
+      <form id="reportFoundForm" novalidate>
+        <!-- Description -->
+        <div class="form-group">
+          <label for="itemDescription" class="form-label">Description (Primary Signal)</label>
+          <textarea 
+            id="itemDescription" 
+            class="form-input" 
+            rows="3" 
+            placeholder="Describe what you found (e.g. Blue insulated water bottle found on SJT ground floor bench)"
+            required
+          ></textarea>
+        </div>
+
+        <!-- Location Found -->
+        <div class="form-group">
+          <label for="itemLocation" class="form-label">Location Found</label>
+          <input type="text" id="itemLocation" class="form-input" placeholder="e.g. SJT Ground Floor, Library 2nd Floor, TT Foodys" required>
+        </div>
+
+        <!-- Date & Time Found -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="itemDate" class="form-label">Date Found</label>
+            <input type="date" id="itemDate" class="form-input" required>
+          </div>
+
+          <div class="form-group">
+            <label for="itemTime" class="form-label">Optional Time</label>
+            <input type="time" id="itemTime" class="form-input">
+          </div>
+        </div>
+
+        <!-- Where is the item now? (Required) -->
+        <div class="form-group" style="margin-top: var(--space-4);">
+          <label class="form-label">Where is the item now?</label>
+          
+          <div class="status-options-list">
+            <label class="status-option-item">
+              <input type="radio" name="currentStatus" value="at_found_location" onchange="handleStatusRadioChange(this)">
+              <div>
+                <strong>I left it where I found it</strong>
+                <p>The item was left at the location where it was spotted.</p>
+              </div>
+            </label>
+
+            <label class="status-option-item">
+              <input type="radio" name="currentStatus" value="with_finder" checked onchange="handleStatusRadioChange(this)">
+              <div>
+                <strong>I have it with me</strong>
+                <p>You are keeping the item safely until the owner claims it.</p>
+              </div>
+            </label>
+
+            <label class="status-option-item">
+              <input type="radio" name="currentStatus" value="with_security" onchange="handleStatusRadioChange(this)">
+              <div>
+                <strong>I gave it to security</strong>
+                <p>You submitted the item to a campus security desk or office.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Security details input (Shown only if with_security is selected) -->
+        <div id="securityDetailsGroup" class="form-group hidden" style="background: var(--gray-50); padding: var(--space-4); border-radius: var(--radius-lg); border: 1px solid var(--gray-200);">
+          <label for="securityDetails" class="form-label">Security Location / Details</label>
+          <input 
+            type="text" 
+            id="securityDetails" 
+            class="form-input" 
+            placeholder="Type the security location (e.g. SJT Main Entrance Security Desk, Officer In-Charge)"
+          >
+        </div>
+
+        <!-- Optional Photo -->
+        <div class="form-group" style="margin-top: var(--space-4);">
+          <label class="form-label">Optional Photo (Supporting Verification)</label>
+          <div class="photo-upload-box" onclick="document.getElementById('foundPhoto').click()">
+            <input type="file" id="foundPhoto" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewSelectedImage(this)">
+            <div id="photoPlaceholderText">
+              <span>Click to select an optional photo (JPEG, PNG, WebP up to 5 MB)</span>
+            </div>
+            <img id="photoPreviewImg" class="photo-preview-img hidden" alt="Selected preview">
+          </div>
+        </div>
+
+        <div style="margin-top: var(--space-6);">
+          <button type="submit" id="submitFoundBtn" class="btn btn-primary btn-block btn-lg">
+            Submit Found Report
+          </button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <footer class="simple-site-footer">
+    <div class="footer-container">
+      <p>Done by Sanjay Guptha R S 24MIS0461<br>Thirukumaran K 24MIS0471<br>Keerthivarman G 24MIS0456</p>
+    </div>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script src="js/utils.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/report-found.js"></script>
+</body>
+</html>
