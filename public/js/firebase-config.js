@@ -26,22 +26,46 @@ LostLink.initFirebase = async function() {
 
     if (!config) {
       console.log('[LostLink Auth] Fetching client configuration from /api/config/firebase...');
-      const res = await fetch('/api/config/firebase');
-      const data = await res.json();
-
-      if (!data.configured || !data.config || !data.config.apiKey) {
-        LostLink.firebaseConfigured = false;
-        LostLink.initError = data.error || 'Firebase client credentials are not configured in .env';
-        console.warn('[LostLink Auth] Firebase client is not configured:', LostLink.initError);
-        document.dispatchEvent(new CustomEvent('firebaseConfigFailed', { detail: { error: LostLink.initError, missingConfig: true } }));
-        enforceGatekeeper(null);
-        return;
+      try {
+        const res = await fetch('/api/config/firebase');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.configured && data.config && data.config.apiKey) {
+            config = data.config;
+          }
+        } else {
+          console.warn(`[LostLink Auth] /api/config/firebase returned HTTP ${res.status}`);
+        }
+      } catch (fetchErr) {
+        console.warn('[LostLink Auth] Fetch error on /api/config/firebase:', fetchErr.message);
       }
 
-      config = data.config;
-      try {
-        sessionStorage.setItem('lostlink_fb_config', JSON.stringify(config));
-      } catch (e) {}
+      // Safe client fallback (Firebase client credentials are safe to expose in web frontends)
+      if (!config) {
+        config = {
+          apiKey: 'AIzaSyDaarUbOPmj0GOXNDmG0eXlPqgSA1g4O1I',
+          authDomain: 'lost-link-62727.firebaseapp.com',
+          projectId: 'lost-link-62727',
+          storageBucket: 'lost-link-62727.firebasestorage.app',
+          messagingSenderId: '306773584089',
+          appId: '1:306773584089:web:45736de1005ececc8af6c8'
+        };
+      }
+
+      if (config && config.apiKey) {
+        try {
+          sessionStorage.setItem('lostlink_fb_config', JSON.stringify(config));
+        } catch (e) {}
+      }
+    }
+
+    if (!config || !config.apiKey) {
+      LostLink.firebaseConfigured = false;
+      LostLink.initError = 'Firebase client credentials are not available.';
+      console.warn('[LostLink Auth] Firebase client is not configured:', LostLink.initError);
+      document.dispatchEvent(new CustomEvent('firebaseConfigFailed', { detail: { error: LostLink.initError, missingConfig: true } }));
+      enforceGatekeeper(null);
+      return;
     }
 
     LostLink.firebaseConfigured = true;
@@ -92,6 +116,7 @@ LostLink.initFirebase = async function() {
   } catch (err) {
     console.error('[LostLink Auth] initFirebase error:', err);
     LostLink.firebaseConfigured = false;
+    LostLink.initError = err.message || 'Firebase initialization failed.';
     enforceGatekeeper(null);
   }
 };
