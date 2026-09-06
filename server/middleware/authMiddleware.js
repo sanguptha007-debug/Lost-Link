@@ -18,7 +18,9 @@ async function requireAuth(req, res, next) {
 
   // Check if Firebase auth is available
   if (!firebaseService.isAvailable) {
-    return res.status(503).json({ error: 'Authentication service is not configured.' });
+    return res.status(503).json({ 
+      error: firebaseService.initError || 'Authentication service is not configured.' 
+    });
   }
 
   try {
