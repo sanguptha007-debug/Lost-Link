@@ -62,7 +62,8 @@ app.get('/api/health', (req, res) => {
       },
       aiService: {
         isAvailable: aiService.isAvailable(),
-        provider: aiService.getProvider()
+        provider: aiService.getProvider(),
+        tiers: typeof aiService.getTiers === 'function' ? aiService.getTiers() : null
       }
     }
   });

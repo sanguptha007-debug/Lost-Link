@@ -54,21 +54,28 @@ window.handleUserMessage = async function() {
 
     const reply = res.response || "I searched our records. You can also search directly on Find My Item or submit a report.";
     const matchingItems = res.items || [];
-    appendBubble(reply, 'assistant', matchingItems);
+    appendBubble(reply, 'assistant', matchingItems, {
+      isAiGenerated: res.isAiGenerated !== false,
+      aiUnavailable: Boolean(res.aiUnavailable),
+      provider: res.provider
+    });
 
     chatHistory.push({ role: 'user', content: message });
     chatHistory.push({ role: 'assistant', content: reply });
   } catch (err) {
     console.error('Assistant error:', err);
     typingBubble.remove();
-    appendBubble("AI matching is temporarily unavailable. You can search active records directly on the Find My Item page or report an item.", 'assistant');
+    appendBubble("AI Assistant is temporarily unavailable. You can search active records directly on the Find My Item page or report an item.", 'assistant', [], {
+      isAiGenerated: false,
+      aiUnavailable: true
+    });
   } finally {
     LostLink.setLoading(sendBtn, false);
     stream.scrollTop = stream.scrollHeight;
   }
 };
 
-function appendBubble(content, role, items = []) {
+function appendBubble(content, role, items = [], meta = {}) {
   const stream = document.getElementById('chatStream');
   const bubble = document.createElement('div');
   bubble.className = `chat-bubble bubble-${role}`;
@@ -79,6 +86,15 @@ function appendBubble(content, role, items = []) {
     .replace(/\n\n/g, '<br><br>')
     .replace(/\n- /g, '<br>• ')
     .replace(/\n/g, '<br>');
+
+  let badgeHtml = '';
+  if (role === 'assistant' && meta) {
+    if (meta.aiUnavailable) {
+      badgeHtml = `<div style="font-size: 11px; font-weight: 600; color: var(--danger, #dc2626); margin-bottom: 6px; letter-spacing: 0.3px;">Campus Database Search (AI Providers Offline)</div>`;
+    } else if (meta.isAiGenerated) {
+      badgeHtml = `<div style="font-size: 11px; font-weight: 600; color: var(--primary, #4338ca); margin-bottom: 6px; letter-spacing: 0.3px;">LostLink AI Assistant</div>`;
+    }
+  }
 
   let itemsHtml = '';
   if (items && items.length > 0) {
@@ -110,7 +126,7 @@ function appendBubble(content, role, items = []) {
     `;
   }
 
-  bubble.innerHTML = formatted + itemsHtml;
+  bubble.innerHTML = badgeHtml + formatted + itemsHtml;
   stream.appendChild(bubble);
   stream.scrollTop = stream.scrollHeight;
 }

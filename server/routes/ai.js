@@ -56,14 +56,20 @@ router.post('/assistant', optionalAuth, async (req, res) => {
     res.json({
       success: true,
       response: chatResult.reply,
-      items: chatResult.matchingItems || []
+      items: chatResult.matchingItems || [],
+      isAiGenerated: chatResult.isAiGenerated !== false,
+      aiUnavailable: Boolean(chatResult.aiUnavailable),
+      provider: chatResult.provider || null
     });
   } catch (err) {
     console.error('[AI] Assistant error:', err);
     res.json({
       success: true,
-      response: "AI matching is temporarily unavailable. Showing results based on available information. You can use Find My Item to search all active reports.",
-      items: []
+      response: "AI matching is temporarily unavailable. You can use Find My Item to search all active reports directly or submit a report.",
+      items: [],
+      isAiGenerated: false,
+      aiUnavailable: true,
+      provider: null
     });
   }
 });

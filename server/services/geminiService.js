@@ -10,19 +10,14 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 let provider = 'none'; // 'gemini' | 'groq' | 'multi' | 'none'
 let genAI = null;              // Tier 1: Primary Gemini
-let tertiaryGenAI = null;      // Tier 3: Tertiary Gemini backup
-let currentModelName = 'gemini-3.7-flash';
+let tertiaryGenAI = null;      // Tier 4: Backup Gemini
+let currentModelName = process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : 'gemini-3.6-flash';
 let isConfigured = false;
 
 const GEMINI_FALLBACK_MODELS = [
-  process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : null,
-  'gemini-3.8-flash',
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
+  (process.env.GEMINI_MODEL || 'gemini-3.6-flash').trim(),
   'gemini-1.5-flash',
-  'gemini-1.5-pro',
-  'gemini-3.7-flash',
-  'gemini-flash-latest'
+  'gemini-1.5-pro'
 ].filter(Boolean);
 
 function initAI() {
@@ -30,7 +25,7 @@ function initAI() {
   if (process.env.GEMINI_API_KEY) {
     try {
       genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY.trim());
-      currentModelName = process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : 'gemini-3.7-flash';
+      currentModelName = process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : 'gemini-3.6-flash';
       console.log(`[AI Service] Tier 1 initialized (Primary Gemini): ${currentModelName}`);
     } catch (err) {
       console.error('[AI Service] Primary Gemini init error:', err.message);
@@ -52,7 +47,7 @@ function initAI() {
   if (backupKey) {
     try {
       tertiaryGenAI = new GoogleGenerativeAI(backupKey);
-      console.log('[AI Service] Backup Gemini initialized');
+      console.log('[AI Service] Tier 4 initialized (Backup Gemini)');
     } catch (err) {
       console.error('[AI Service] Backup Gemini init error:', err.message);
     }
@@ -98,12 +93,16 @@ function parseAIJSON(text) {
 }
 
 /**
- * Execute Gemini call with timeout and model fallback
+ * Execute Gemini call with bounded timeout and fast failover on quota exhaustion
  */
-async function callGeminiClient(clientInstance, promptOrParts, timeoutMs = 5000) {
+async function callGeminiClient(clientInstance, promptOrParts, timeoutMs = 3500) {
   if (!clientInstance) throw new Error('Gemini client not initialized');
 
-  const modelsToTry = [currentModelName, ...GEMINI_FALLBACK_MODELS.filter(m => m !== currentModelName)].slice(0, 4);
+  const modelsToTry = Array.from(new Set([
+    (process.env.GEMINI_MODEL || 'gemini-3.6-flash').trim(),
+    ...GEMINI_FALLBACK_MODELS
+  ])).slice(0, 2);
+
   let lastErr = null;
 
   for (const mName of modelsToTry) {
@@ -126,16 +125,19 @@ async function callGeminiClient(clientInstance, promptOrParts, timeoutMs = 5000)
       throw new Error(`Gemini model "${mName}" returned an empty response`);
     } catch (err) {
       lastErr = err;
-      console.warn(`[AI Service] Model "${mName}" warning: ${err.message.slice(0, 90)}`);
+      console.warn(`[AI Service] Gemini model "${mName}" notice: ${err.message.slice(0, 80)}`);
+      // If 429 quota exhausted or auth invalid (401/403), the ENTIRE key/project is exhausted.
+      // Immediately abort model iteration to avoid wasting time; escalate to the next provider!
       if (err.message && (
+        err.message.includes('429') ||
+        err.message.includes('Quota') ||
+        err.message.includes('quota') ||
+        err.message.includes('ResourceExhausted') ||
+        err.message.includes('RESOURCE_EXHAUSTED') ||
         err.message.includes('API_KEY_INVALID') ||
         err.message.includes('API key not valid') ||
         err.message.includes('401') ||
-        err.message.includes('403') ||
-        err.message.includes('429') ||
-        err.message.includes('Quota exceeded') ||
-        err.message.includes('ResourceExhausted') ||
-        err.message.includes('RESOURCE_EXHAUSTED')
+        err.message.includes('403')
       )) {
         break;
       }
@@ -148,16 +150,20 @@ async function callGeminiClient(clientInstance, promptOrParts, timeoutMs = 5000)
 /**
  * Call Groq / OpenAI compatible Chat Completion API
  */
-async function callGroqChat(messages, maxTokens = 1000, timeoutMs = 6000, specificApiKey = null) {
+async function callGroqChat(messages, maxTokens = 1000, timeoutMs = 3500, specificApiKey = null) {
   const apiKey = (specificApiKey || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '').trim();
   if (!apiKey) throw new Error('Groq/OpenAI API key is not configured');
 
   const isGroq = apiKey.startsWith('gsk_') || Boolean(process.env.GROQ_API_KEY);
   const endpoint = isGroq ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
 
-  // Supported Groq models with auto-fallback
+  // Supported Groq models with auto-fallback (prioritizing active models on this account)
   const candidateModels = isGroq
-    ? [process.env.GROQ_MODEL, 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'].filter(Boolean)
+    ? Array.from(new Set([
+        (process.env.GROQ_MODEL || '').trim(),
+        'qwen/qwen3.8-27b',
+        'openai/gpt-oss-20b'
+      ])).filter(Boolean)
     : [process.env.OPENAI_MODEL, 'gpt-4o-mini'].filter(Boolean);
 
   let lastError = null;
@@ -197,14 +203,17 @@ async function callGroqChat(messages, maxTokens = 1000, timeoutMs = 6000, specif
       const data = await res.json();
       const content = data?.choices?.[0]?.message?.content;
       if (typeof content === 'string' && content.trim().length > 0) {
-        return content.trim();
+        return {
+          text: content.trim(),
+          model
+        };
       }
       throw new Error('Chat API returned an empty completion content');
     } catch (err) {
       clearTimeout(timeoutId);
       lastError = err;
-      // If 429 quota or 401/403 auth error, do not retry other models with the same key
-      if (err.message && (err.message.includes('401') || err.message.includes('403') || err.message.includes('429'))) {
+      // If 429 quota or 401/403 auth error or abort timeout, do not retry other models with the same key
+      if (err.message && (err.message.includes('401') || err.message.includes('403') || err.message.includes('429') || err.name === 'AbortError')) {
         throw err;
       }
     }
@@ -219,8 +228,10 @@ async function callGroqChat(messages, maxTokens = 1000, timeoutMs = 6000, specif
  * 2. Tier 2: Groq Cloud Primary (GROQ_API_KEY / OPENAI_API_KEY)
  * 3. Tier 3: Groq Cloud Secondary (GROQ_API_KEY2, if provided)
  * 4. Tier 4: Backup Gemini (GEMINI_API_KEY_BACKUP / AI_KEY_TERTIARY)
+ * 
+ * Supports returnMeta = true to return { text, provider, tier }
  */
-async function runAIPrompt(prompt, systemInstruction = '') {
+async function runAIPrompt(prompt, systemInstruction = '', returnMeta = false) {
   if (!isConfigured) {
     throw new Error('No AI providers configured in server environment.');
   }
@@ -237,11 +248,15 @@ async function runAIPrompt(prompt, systemInstruction = '') {
   // TIER 1: Primary Gemini
   if (genAI) {
     try {
-      const res = await callGeminiClient(genAI, fullPrompt, 5000);
-      if (res) return res;
+      const res = await callGeminiClient(genAI, fullPrompt, 3500);
+      if (res) {
+        return returnMeta
+          ? { text: res, provider: `Google Gemini (${currentModelName})`, tier: 1 }
+          : res;
+      }
     } catch (err1) {
       console.warn(`[AI Fallback] Tier 1 (Primary Gemini) unavailable: ${err1.message.slice(0, 80)}. Escalating to Tier 2...`);
-      errors.push(`Tier 1: ${err1.message}`);
+      errors.push(`Tier 1: ${err1.message.slice(0, 60)}`);
     }
   }
 
@@ -249,14 +264,16 @@ async function runAIPrompt(prompt, systemInstruction = '') {
   const groqKey1 = (process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '').trim();
   if (groqKey1) {
     try {
-      const res = await callGroqChat(messages, 1000, 5000, groqKey1);
-      if (res) {
-        console.log('[AI Fallback] Tier 2 (Groq Cloud Primary) succeeded.');
-        return res;
+      const res = await callGroqChat(messages, 1000, 3500, groqKey1);
+      if (res && res.text) {
+        console.log(`[AI Fallback] Tier 2 (Groq Cloud Primary) succeeded with ${res.model}.`);
+        return returnMeta
+          ? { text: res.text, provider: `Groq Cloud (${res.model})`, tier: 2 }
+          : res.text;
       }
     } catch (err2) {
-      console.warn(`[AI Fallback] Tier 2 (Groq Primary) failed: ${err2.message.slice(0, 80)}. Escalating to next provider...`);
-      errors.push(`Tier 2: ${err2.message}`);
+      console.warn(`[AI Fallback] Tier 2 (Groq Primary) unavailable: ${err2.message.slice(0, 80)}. Escalating to Tier 3...`);
+      errors.push(`Tier 2: ${err2.message.slice(0, 60)}`);
     }
   }
 
@@ -264,28 +281,32 @@ async function runAIPrompt(prompt, systemInstruction = '') {
   const groqKey2 = (process.env.GROQ_API_KEY2 || '').trim();
   if (groqKey2) {
     try {
-      const res = await callGroqChat(messages, 1000, 5000, groqKey2);
-      if (res) {
-        console.log('[AI Fallback] Tier 3 (Groq Cloud Secondary) succeeded.');
-        return res;
+      const res = await callGroqChat(messages, 1000, 3500, groqKey2);
+      if (res && res.text) {
+        console.log(`[AI Fallback] Tier 3 (Groq Cloud Secondary) succeeded with ${res.model}.`);
+        return returnMeta
+          ? { text: res.text, provider: `Groq Cloud Secondary (${res.model})`, tier: 3 }
+          : res.text;
       }
     } catch (err3) {
-      console.warn(`[AI Fallback] Tier 3 (Groq Secondary) failed: ${err3.message.slice(0, 80)}. Escalating to Backup Gemini...`);
-      errors.push(`Tier 3: ${err3.message}`);
+      console.warn(`[AI Fallback] Tier 3 (Groq Secondary) unavailable: ${err3.message.slice(0, 80)}. Escalating to Tier 4...`);
+      errors.push(`Tier 3: ${err3.message.slice(0, 60)}`);
     }
   }
 
   // TIER 4: Backup Gemini
   if (tertiaryGenAI) {
     try {
-      const res = await callGeminiClient(tertiaryGenAI, fullPrompt, 5000);
+      const res = await callGeminiClient(tertiaryGenAI, fullPrompt, 4000);
       if (res) {
-        console.log('[AI Fallback] Tier 4 (Backup Gemini) succeeded.');
-        return res;
+        console.log(`[AI Fallback] Tier 4 (Backup Gemini) succeeded with ${currentModelName}.`);
+        return returnMeta
+          ? { text: res, provider: `Google Gemini Backup (${currentModelName})`, tier: 4 }
+          : res;
       }
     } catch (err4) {
-      console.warn(`[AI Fallback] Tier 4 (Backup Gemini) failed: ${err4.message.slice(0, 80)}.`);
-      errors.push(`Tier 4: ${err4.message}`);
+      console.warn(`[AI Fallback] Tier 4 (Backup Gemini) unavailable: ${err4.message.slice(0, 80)}.`);
+      errors.push(`Tier 4: ${err4.message.slice(0, 60)}`);
     }
   }
 
@@ -591,18 +612,16 @@ Respond ONLY with a JSON object:
  * @returns {Promise<{ reply: string, matchingItems: Array }>}
  */
 async function assistantChat(message, history = [], searchFoundReportsFn = null) {
-  if (!isConfigured) {
-    return {
-      reply: "AI assistant is temporarily unavailable because the AI provider key is not configured. You can search found reports directly on the Find My Item page or create a report.",
-      matchingItems: []
-    };
-  }
-
   const cleanMessage = (message || '').trim();
   const lower = cleanMessage.toLowerCase();
 
   // Detect if user is describing a lost item to search
-  const isSearchIntent = lower.includes('lost') || lower.includes('looking for') || lower.includes('find') || lower.includes('anyone find') || lower.includes('did anyone');
+  const isSearchIntent = lower.includes('lost') || lower.includes('looking for') || lower.includes('find') || 
+                         lower.includes('anyone find') || lower.includes('did anyone') || lower.includes('wallet') || 
+                         lower.includes('id') || lower.includes('card') || lower.includes('phone') || 
+                         lower.includes('bag') || lower.includes('keys') || lower.includes('charger') || 
+                         lower.includes('earbuds') || lower.includes('headphones') || lower.includes('bottle') || 
+                         lower.includes('box') || lower.includes('laptop') || lower.includes('specs');
   let realMatches = [];
 
   if (isSearchIntent && searchFoundReportsFn) {
@@ -614,19 +633,43 @@ async function assistantChat(message, history = [], searchFoundReportsFn = null)
     }
   }
 
+  if (!isConfigured) {
+    if (realMatches.length > 0) {
+      return {
+        reply: `AI reasoning is currently offline, but LostLink searched active campus records and found ${realMatches.length} matching item(s) in the database. Please review them below:`,
+        matchingItems: realMatches,
+        isAiGenerated: false,
+        aiUnavailable: true
+      };
+    }
+    return {
+      reply: "The AI Assistant is temporarily unavailable because no AI provider keys are configured in the server environment. You can search found reports directly on the Find My Item page or submit a report.",
+      matchingItems: [],
+      isAiGenerated: false,
+      aiUnavailable: true
+    };
+  }
+
   const candidateSummary = realMatches.length > 0
     ? realMatches.slice(0, 3).map((m, i) => `#${i + 1}: "${m.title || m.description}" at ${m.location || 'Campus'} (Date: ${m.date || 'Recent'}, Status: ${m.currentStatus || 'with_finder'})`).join('\n')
-    : 'No matching found reports exist in the database.';
+    : 'No matching found reports currently exist in the campus database.';
 
-  const systemInstruction = `You are the official LostLink campus assistant for VIT.
+  const systemInstruction = `You are the official LostLink campus assistant for VIT (Vellore Institute of Technology).
 Strict rules:
-1. Do NOT use any emojis.
-2. NEVER invent or fabricate any found item or database record.
+1. Do NOT use any emojis under any circumstances.
+2. NEVER invent, hallucinate, or fabricate any found item, report, student name, or phone number.
 3. Every found item mentioned MUST come strictly from the "REAL DATABASE RESULTS" section below.
-4. If "REAL DATABASE RESULTS" states no matches exist, clearly and truthfully tell the student that no matching item has been reported yet, and advise them to submit a Lost Report.
-5. If real matches exist, concisely summarize them (mention the item, location, and that they can click the item to see full details).
-6. If the user found an item, guide them to click "Report Found" and mention security counters (e.g. SJT ground floor, TT security desk, Library).
-7. Keep answers concise, clear, and practical.`;
+4. If "REAL DATABASE RESULTS" states no matches exist:
+   - State truthfully that no matching report is currently registered on LostLink.
+   - Advise them to submit a Lost Report on LostLink so they receive automatic match notifications when someone reports finding it.
+5. If "REAL DATABASE RESULTS" has matching items:
+   - Concisely summarize the matching item(s) and location, and let them know they can click the item card below to view details and contact the finder.
+6. If the student asks for guidance on lost items, lost ID cards, wallets, or campus procedures:
+   - Provide concrete, helpful campus advice:
+     * Student ID Cards: Check the Central Library security desk, SJT ground floor security, TT security desk, or Main Building security office. Advise them to visit the security office if not recovered.
+     * Wallets / Electronics: Check nearby building security counters and submit a Lost Report.
+     * Found items: Direct them to click "Report Found" on LostLink and deposit the physical item at the nearest designated security desk.
+7. Keep responses clear, professional, direct, and helpful.`;
 
   const userContextPrompt = `Student Message: "${cleanMessage}"
 
@@ -636,22 +679,31 @@ ${candidateSummary}
 Answer the student clearly according to the rules:`;
 
   try {
-    const text = await runAIPrompt(userContextPrompt, systemInstruction);
+    const aiResult = await runAIPrompt(userContextPrompt, systemInstruction, true);
     return {
-      reply: text.trim(),
-      matchingItems: realMatches
+      reply: aiResult.text.trim(),
+      matchingItems: realMatches,
+      isAiGenerated: true,
+      provider: aiResult.provider,
+      tier: aiResult.tier
     };
   } catch (err) {
-    console.error('[AI Service] assistantChat error:', err.message);
+    console.error('[AI Service] All AI providers failed in assistantChat:', err.message);
     if (realMatches.length > 0) {
       return {
-        reply: `I searched the database and found ${realMatches.length} possible matching report(s). Please review them below:`,
-        matchingItems: realMatches
+        reply: `AI reasoning is temporarily unavailable across all configured providers (rate/quota limits). However, LostLink searched our live campus database directly and found ${realMatches.length} matching found item(s) for your search. Please review them below:`,
+        matchingItems: realMatches,
+        isAiGenerated: false,
+        aiUnavailable: true,
+        errorReason: err.message
       };
     }
     return {
-      reply: "I searched our campus found records, but no matching items were found for your description. Please consider submitting a Lost Report so you will be contacted if someone finds it.",
-      matchingItems: []
+      reply: "The AI Assistant is temporarily unavailable because all configured AI providers have reached their quota limits or are unreachable. You can search all active campus reports directly on the Find My Item page or submit a Lost Report.",
+      matchingItems: [],
+      isAiGenerated: false,
+      aiUnavailable: true,
+      errorReason: err.message
     };
   }
 }
@@ -662,5 +714,11 @@ module.exports = {
   verifyPhotos,
   assistantChat,
   isAvailable: () => isConfigured,
-  getProvider: () => provider
+  getProvider: () => provider,
+  getTiers: () => ({
+    tier1_primary_gemini: Boolean(genAI),
+    tier2_groq_primary: Boolean(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY),
+    tier3_groq_secondary: Boolean(process.env.GROQ_API_KEY2),
+    tier4_backup_gemini: Boolean(tertiaryGenAI)
+  })
 };
