@@ -285,3 +285,183 @@ document.addEventListener('DOMContentLoaded', () => {
   LostLink.initNavToggle();
 });
 
+/**
+ * Duplicate Report Warning Dialog
+ * Shows suspected duplicate reports and allows student to review or submit anyway.
+ */
+LostLink.showDuplicateWarningModal = function(matches, onConfirmSubmit) {
+  const existing = document.getElementById('duplicateWarningModal');
+  if (existing) existing.remove();
+
+  let primaryMatch = {};
+  if (Array.isArray(matches) && matches.length > 0) {
+    primaryMatch = matches[0];
+  } else if (matches && typeof matches === 'object') {
+    primaryMatch = matches;
+  }
+  const similarity = Math.round(primaryMatch.similarity || (primaryMatch.score ? primaryMatch.score * 100 : 70));
+
+  const modalHtml = `
+    <div id="duplicateWarningModal" class="duplicate-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="dupModalTitle">
+      <div class="duplicate-modal-card">
+        <div class="duplicate-modal-header">
+          <div class="duplicate-warning-icon">⚠️</div>
+          <div>
+            <h3 id="dupModalTitle">Potential Duplicate Report</h3>
+            <p>An existing report with very similar details was found on campus.</p>
+          </div>
+        </div>
+
+        <div class="duplicate-match-box">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <div class="duplicate-match-title">${LostLink.sanitize(primaryMatch.title || 'Similar Report')}</div>
+            <span class="badge badge-warning">${similarity}% Similarity</span>
+          </div>
+          <div class="duplicate-match-meta">
+            <span>Location: ${LostLink.sanitize(primaryMatch.location || 'Campus')}</span> • 
+            <span>Date: ${LostLink.formatDate(primaryMatch.date)}</span>
+          </div>
+          <p class="duplicate-match-desc">${LostLink.sanitize(primaryMatch.description || '')}</p>
+          ${primaryMatch.id ? `<div style="margin-top: 8px;"><a href="item-details.html?id=${primaryMatch.id}" target="_blank" class="notif-action-link">View Existing Report in new tab &rarr;</a></div>` : ''}
+        </div>
+
+        <p style="font-size: var(--text-xs); color: var(--gray-500); line-height: 1.5;">
+          If this is genuinely a different item or instance, you can submit anyway. Duplicate listings make it harder for students to recover lost belongings.
+        </p>
+
+        <div class="duplicate-actions">
+          <button type="button" class="btn btn-ghost" id="dupCancelBtn">Cancel & Edit</button>
+          <button type="button" class="btn btn-primary" id="dupConfirmBtn">Submit Anyway</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modalEl = document.getElementById('duplicateWarningModal');
+
+  const cleanup = () => {
+    if (modalEl) modalEl.remove();
+  };
+
+  const cancelBtn = document.getElementById('dupCancelBtn');
+  if (cancelBtn) cancelBtn.addEventListener('click', cleanup);
+
+  const confirmBtn = document.getElementById('dupConfirmBtn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', () => {
+      cleanup();
+      if (typeof onConfirmSubmit === 'function') {
+        onConfirmSubmit();
+      }
+    });
+  }
+};
+
+/**
+ * Accessible Report Deletion Confirmation Modal
+ * Shows clear modal identifying the report by title before deletion.
+ * Server strictly verifies identity via authenticated Bearer token.
+ */
+LostLink.confirmReportDeletion = function(optionsOrId, optTitle, optType, optOnConfirmed) {
+  let reportId, title, type, onConfirmed;
+  if (typeof optionsOrId === 'object' && optionsOrId !== null) {
+    reportId = optionsOrId.reportId || optionsOrId.id;
+    title = optionsOrId.title;
+    type = optionsOrId.type || 'report';
+    onConfirmed = optionsOrId.onConfirmed;
+  } else {
+    reportId = optionsOrId;
+    title = optTitle;
+    type = optType || 'report';
+    onConfirmed = optOnConfirmed;
+  }
+
+  if (!reportId) {
+    console.error('[LostLink] confirmReportDeletion called without valid reportId');
+    LostLink.showToast('Unable to identify report for deletion.', 'error');
+    return;
+  }
+
+  const existing = document.getElementById('deleteConfirmModal');
+  if (existing) existing.remove();
+
+  const typeName = type === 'lost' ? 'Lost Report' : (type === 'found' ? 'Found Report' : 'Report');
+
+  const modalHtml = `
+    <div id="deleteConfirmModal" class="duplicate-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+      <div class="duplicate-modal-card">
+        <div class="duplicate-modal-header">
+          <div class="duplicate-warning-icon" style="background: var(--danger-light); color: var(--danger); border-color: var(--danger-border);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="deleteModalTitle">Delete ${LostLink.sanitize(typeName)}</h3>
+            <p style="margin-top: 2px;">This action cannot be undone.</p>
+          </div>
+        </div>
+
+        <div class="duplicate-match-box" style="border-left: 3px solid var(--danger);">
+          <div class="duplicate-match-title" style="font-size: var(--text-base);">${LostLink.sanitize(title || 'This Report')}</div>
+          <p class="duplicate-match-desc" style="margin: 6px 0 0; line-height: 1.5;">
+            Are you sure you want to permanently delete this report listing? Any uploaded photo for this report will also be safely removed.
+          </p>
+        </div>
+
+        <div id="deleteModalError" class="auth-alert hidden" style="margin-bottom: var(--space-4);"></div>
+
+        <div class="duplicate-actions">
+          <button type="button" class="btn btn-ghost" id="cancelDeleteBtn">Cancel</button>
+          <button type="button" class="btn btn-danger" id="confirmDeleteBtn" style="background: var(--danger); color: #ffffff; border-color: var(--danger);">
+            Delete Report
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modalEl = document.getElementById('deleteConfirmModal');
+  const cancelBtn = document.getElementById('cancelDeleteBtn');
+  const confirmBtn = document.getElementById('confirmDeleteBtn');
+  const errorBox = document.getElementById('deleteModalError');
+
+  const close = () => {
+    if (modalEl) modalEl.remove();
+  };
+
+  cancelBtn.addEventListener('click', close);
+
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      close();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+
+  confirmBtn.addEventListener('click', async () => {
+    LostLink.setLoading(confirmBtn, true, 'Deleting...');
+    cancelBtn.disabled = true;
+    errorBox.classList.add('hidden');
+
+    try {
+      await LostLink.api(`/api/reports/${reportId}`, { method: 'DELETE' });
+      close();
+      LostLink.showToast('Report deleted successfully.', 'success');
+      if (typeof onConfirmed === 'function') {
+        onConfirmed();
+      }
+    } catch (err) {
+      LostLink.setLoading(confirmBtn, false);
+      cancelBtn.disabled = false;
+      errorBox.textContent = err.message || 'Failed to delete report. Please try again.';
+      errorBox.classList.remove('hidden');
+    }
+  });
+};
+
+
+

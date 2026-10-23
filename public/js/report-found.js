@@ -94,58 +94,70 @@ async function handleFoundSubmit(e) {
     return;
   }
 
-  LostLink.setLoading(submitBtn, true, 'Submitting report...');
+  const doSubmit = async (confirmDuplicate = false) => {
+    LostLink.setLoading(submitBtn, true, 'Submitting report...');
 
-  try {
-    const formData = new FormData();
-    formData.append('type', 'found');
-    formData.append('description', description);
-    formData.append('location', location);
-    formData.append('date', date);
-    if (time) formData.append('time', time);
-    formData.append('currentStatus', currentStatus);
-    if (currentStatus === 'with_security') {
-      formData.append('securityDetails', securityDetails);
-    }
-    if (selectedFoundPhoto) formData.append('image', selectedFoundPhoto);
-
-    const res = await LostLink.api('/api/reports', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (res.success && res.item) {
-      LostLink.showToast('Found report submitted.', 'success');
-      const formCard = document.querySelector('.form-container-card');
-      const matchCount = (res.matches || []).length;
-
-      if (formCard) {
-        formCard.innerHTML = `
-          <div style="text-align: center; padding: var(--space-8) var(--space-4);">
-            <div style="width: 56px; height: 56px; background: var(--success-light); color: var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; margin: 0 auto var(--space-4);">✓</div>
-            <h2 style="font-size: var(--text-2xl); font-weight: 700; color: var(--gray-900); margin: 0 0 var(--space-2);">Found report submitted</h2>
-            <p style="color: var(--gray-600); max-width: 480px; margin: 0 auto var(--space-6); font-size: var(--text-sm); line-height: 1.6;">
-              Your found report for <strong>"${LostLink.sanitize(res.item.title)}"</strong> has been recorded. Thank you for helping return items to the campus community.
-              ${matchCount > 0 ? `<br><span style="color: var(--primary-dark); font-weight: 600;">We detected ${matchCount} active lost report(s) that may match this item!</span>` : ''}
-            </p>
-            <div style="display: flex; flex-direction: column; gap: var(--space-3); max-width: 300px; margin: 0 auto;">
-              <a href="find-items.html?tab=found" class="btn btn-primary btn-block">View Found Reports</a>
-              <a href="find-items.html" class="btn btn-outline btn-block">Find My Item</a>
-              <a href="find-items.html" class="btn btn-ghost btn-block">Return Home</a>
-            </div>
-          </div>
-        `;
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
-        window.location.href = 'find-items.html?tab=found';
+    try {
+      const formData = new FormData();
+      formData.append('type', 'found');
+      formData.append('description', description);
+      formData.append('location', location);
+      formData.append('date', date);
+      if (time) formData.append('time', time);
+      formData.append('currentStatus', currentStatus);
+      if (currentStatus === 'with_security') {
+        formData.append('securityDetails', securityDetails);
       }
-    } else {
-      LostLink.showToast(res.error || 'Failed to submit report.', 'error');
+      if (selectedFoundPhoto) formData.append('image', selectedFoundPhoto);
+      if (confirmDuplicate) formData.append('confirmDuplicate', 'true');
+
+      const res = await LostLink.api('/api/reports', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.success && res.item) {
+        LostLink.showToast('Found report submitted.', 'success');
+        const formCard = document.querySelector('.form-container-card');
+        const matchCount = (res.matches || []).length;
+
+        if (formCard) {
+          formCard.innerHTML = `
+            <div style="text-align: center; padding: var(--space-8) var(--space-4);">
+              <div style="width: 56px; height: 56px; background: var(--success-light); color: var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; margin: 0 auto var(--space-4);">✓</div>
+              <h2 style="font-size: var(--text-2xl); font-weight: 700; color: var(--gray-900); margin: 0 0 var(--space-2);">Found report submitted</h2>
+              <p style="color: var(--gray-600); max-width: 480px; margin: 0 auto var(--space-6); font-size: var(--text-sm); line-height: 1.6;">
+                Your found report for <strong>"${LostLink.sanitize(res.item.title)}"</strong> has been recorded. Thank you for helping return items to the campus community.
+                ${matchCount > 0 ? `<br><span style="color: var(--primary-dark); font-weight: 600;">We detected ${matchCount} active lost report(s) that may match this item!</span>` : ''}
+              </p>
+              <div style="display: flex; flex-direction: column; gap: var(--space-3); max-width: 300px; margin: 0 auto;">
+                <a href="find-items.html?tab=found" class="btn btn-primary btn-block">View Found Reports</a>
+                <a href="find-items.html" class="btn btn-outline btn-block">Find My Item</a>
+                <a href="find-items.html" class="btn btn-ghost btn-block">Return Home</a>
+              </div>
+            </div>
+          `;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          window.location.href = 'find-items.html?tab=found';
+        }
+      } else {
+        LostLink.showToast(res.error || 'Failed to submit report.', 'error');
+        LostLink.setLoading(submitBtn, false);
+      }
+    } catch (err) {
       LostLink.setLoading(submitBtn, false);
+      if (err.status === 409 && err.data && err.data.potentialDuplicate) {
+        LostLink.showDuplicateWarningModal(err.data.matches, () => {
+          doSubmit(true);
+        });
+        return;
+      }
+      console.error('Submit error:', err);
+      LostLink.showToast(err.message || 'Service is temporarily unavailable. Please try again later.', 'error');
     }
-  } catch (err) {
-    console.error('Submit error:', err);
-    LostLink.showToast(err.message || 'Service is temporarily unavailable. Please try again later.', 'error');
-    LostLink.setLoading(submitBtn, false);
-  }
+  };
+
+  await doSubmit(false);
 }
+

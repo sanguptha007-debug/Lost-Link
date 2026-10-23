@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+let currentLostReports = [];
+
 async function loadMyLostReports(userId) {
   const list = document.getElementById('lostReportsList');
   if (!list) return;
@@ -39,6 +41,7 @@ async function loadMyLostReports(userId) {
   try {
     const data = await LostLink.api(`/api/reports?type=lost&userId=${userId}`);
     const reports = data.items || [];
+    currentLostReports = reports;
 
     if (reports.length === 0) {
       list.innerHTML = `
@@ -54,11 +57,11 @@ async function loadMyLostReports(userId) {
     }
 
     list.innerHTML = reports.map(r => `
-      <div class="report-card" id="lost-report-${r.id}" style="background: #ffffff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: var(--space-5); box-shadow: var(--shadow-sm);">
+      <div class="report-card" id="lost-report-${r.id}">
         <div style="display: flex; gap: var(--space-4); flex-wrap: wrap;">
           ${r.imageUrl ? `
             <div class="card-image-wrap" style="width: 110px; height: 110px; flex-shrink: 0; cursor: zoom-in;" title="Click to view full image" onclick="LostLink.openImageModal('${LostLink.sanitize(r.imageUrl)}', '${LostLink.sanitize(r.title)}')">
-              <img src="${LostLink.sanitize(r.imageUrl)}" alt="${LostLink.sanitize(r.title)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-md);">
+              <img src="${LostLink.sanitize(r.imageUrl)}" alt="${LostLink.sanitize(r.title)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-md);" loading="lazy" decoding="async">
             </div>
           ` : `
             <div style="width: 110px; height: 110px; flex-shrink: 0; background: var(--gray-100); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); color: var(--gray-500); text-align: center; padding: 6px;">
@@ -107,15 +110,24 @@ async function loadMyLostReports(userId) {
       </div>
     `).join('');
 
-    // Fetch real matches for each active lost report
-    reports.forEach(r => {
-      if (r.status === 'resolved') {
-        const el = document.getElementById(`matches-for-${r.id}`);
-        if (el) el.innerHTML = `<span class="badge badge-success">Resolved</span>`;
-      } else {
-        checkMatchesForReport(r.id);
-      }
+
+    // Fetch real matches for each active report — run max 2 at a time to avoid
+    // flooding the network with simultaneous Gemini API calls that freeze the page.
+    const activeReports = reports.filter(r => r.status !== 'resolved');
+    const resolvedReports = reports.filter(r => r.status === 'resolved');
+
+    resolvedReports.forEach(r => {
+      const el = document.getElementById(`matches-for-${r.id}`);
+      if (el) el.innerHTML = `<span class="badge badge-success">Resolved</span>`;
     });
+
+    // Process in pairs so the UI stays responsive between batches
+    const CONCURRENCY = 2;
+    for (let i = 0; i < activeReports.length; i += CONCURRENCY) {
+      const batch = activeReports.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(r => checkMatchesForReport(r.id)));
+    }
+
   } catch (err) {
     console.error('Error loading lost reports:', err);
     list.innerHTML = `
@@ -197,15 +209,30 @@ window.resolveLostReport = async function(reportId) {
   }
 };
 
-window.deleteLostReport = async function(reportId) {
-  if (!confirm('Are you sure you want to delete this lost report?')) return;
-  try {
-    await LostLink.api(`/api/reports/${reportId}`, {
-      method: 'DELETE'
-    });
-    LostLink.showToast('Report deleted.', 'info');
-    document.getElementById(`lost-report-${reportId}`)?.remove();
-  } catch (err) {
-    LostLink.showToast(err.message || 'Failed to delete report.', 'error');
-  }
+window.deleteLostReport = function(reportId, optionalTitle) {
+  const report = currentLostReports.find(r => r.id === reportId);
+  const title = optionalTitle || (report ? report.title : 'Lost Item');
+
+  LostLink.confirmReportDeletion({
+    reportId,
+    title,
+    type: 'lost',
+    onConfirmed: () => {
+      currentLostReports = currentLostReports.filter(r => r.id !== reportId);
+      const card = document.getElementById(`lost-report-${reportId}`);
+      if (card) card.remove();
+      const list = document.getElementById('lostReportsList');
+      if (list && (list.querySelectorAll('.report-card').length === 0 || currentLostReports.length === 0)) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <h3 class="empty-state-title">No Lost Reports Yet</h3>
+            <p class="empty-state-desc">You have not submitted any lost item reports yet.</p>
+            <div style="margin-top: var(--space-4);">
+              <a href="report-lost.html" class="btn btn-primary btn-sm">Report a Lost Item</a>
+            </div>
+          </div>
+        `;
+      }
+    }
+  });
 };

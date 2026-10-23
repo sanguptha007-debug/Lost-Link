@@ -8,6 +8,14 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/pages.css">
   <link rel="stylesheet" href="css/responsive.css">
+  <script>
+    (function() {
+      var saved = localStorage.getItem('lostlink_theme');
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = saved || (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
 </head>
 <body>
 
@@ -26,5 +34,6 @@
 
   <script src="js/utils.js"></script>
   <script src="js/firebase-config.js"></script>
+  <script src="js/theme.js"></script>
 </body>
 </html>

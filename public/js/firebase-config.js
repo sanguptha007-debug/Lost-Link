@@ -267,6 +267,25 @@ LostLink.signInWithGoogle = async function() {
 /**
  * Sign out
  */
+/**
+ * onAuthStateChanged — convenience wrapper used by page scripts.
+ * Calls callback once immediately if a user is already known,
+ * then again whenever the auth state changes.
+ */
+LostLink.onAuthStateChanged = function(callback) {
+  if (typeof callback !== 'function') return;
+
+  // Fire immediately with whatever state we already have
+  if (LostLink.firebaseReady) {
+    callback(LostLink.currentUser || null);
+  }
+
+  // Then subscribe to future changes
+  document.addEventListener('authStateChanged', (e) => {
+    callback(e.detail?.user || null);
+  });
+};
+
 LostLink.logout = async function() {
   try {
     if (LostLink.firebaseReady && LostLink.auth) {
@@ -286,6 +305,31 @@ LostLink.logout = async function() {
 LostLink.getAuthToken = async function() {
   if (LostLink.auth && LostLink.auth.currentUser) {
     return LostLink.auth.currentUser.getIdToken(false);
+  }
+  // If auth is initialized but currentUser is still restoring from persistence, wait briefly
+  if (LostLink.auth) {
+    return new Promise((resolve) => {
+      let resolved = false;
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      }, 1500);
+
+      const unsubscribe = LostLink.auth.onAuthStateChanged((u) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          try { unsubscribe(); } catch (e) {}
+          if (u) {
+            u.getIdToken(false).then(resolve).catch(() => resolve(null));
+          } else {
+            resolve(null);
+          }
+        }
+      });
+    });
   }
   return null;
 };

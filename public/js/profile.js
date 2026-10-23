@@ -68,8 +68,8 @@ async function fetchUserReports() {
       return `
         <a href="item-details.html?id=${item.id}" class="item-card">
           ${item.imageUrl ? `
-            <div class="card-image-wrap" style="height: 120px;">
-              <img src="${LostLink.sanitize(item.imageUrl)}" alt="${LostLink.sanitize(item.title)}">
+            <div class="card-image-wrap" style="height: 120px;" title="Click to view full photo" onclick="event.preventDefault(); event.stopPropagation(); LostLink.openImageModal('${LostLink.sanitize(item.imageUrl)}', '${LostLink.sanitize(item.title)}')">
+              <img src="${LostLink.sanitize(item.imageUrl)}" alt="${LostLink.sanitize(item.title)}" loading="lazy" decoding="async">
             </div>
           ` : ''}
           <div class="card-content">

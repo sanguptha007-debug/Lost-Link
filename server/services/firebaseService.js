@@ -149,27 +149,53 @@ module.exports = {
   },
 
   // Helper: Query collection with resilient fallback for missing composite indexes
-  async queryDocs(collection, filters = {}, orderByField = 'createdAt', limit = 50) {
+  async queryDocs(collection, filters = {}, orderByField = 'createdAt', orderDirOrLimit = 'desc', possibleLimit = 50) {
     const database = requireDB();
     let query = database.collection(collection);
 
-    for (const [key, value] of Object.entries(filters)) {
-      if (value !== undefined && value !== null && value !== '') {
-        if (Array.isArray(value)) {
-          query = query.where(key, 'in', value);
-        } else {
-          query = query.where(key, '==', value);
+    if (Array.isArray(filters)) {
+      for (const f of filters) {
+        if (f && f.field) {
+          query = query.where(f.field, f.op || '==', f.value);
+        }
+      }
+    } else if (filters && typeof filters === 'object') {
+      for (const [key, value] of Object.entries(filters)) {
+        if (value !== undefined && value !== null && value !== '') {
+          if (Array.isArray(value)) {
+            query = query.where(key, 'in', value);
+          } else {
+            query = query.where(key, '==', value);
+          }
         }
       }
     }
 
+    let orderDirection = 'desc';
+    let rawLimit = 50;
+
+    if (typeof orderDirOrLimit === 'number') {
+      rawLimit = orderDirOrLimit;
+    } else if (typeof orderDirOrLimit === 'string') {
+      const lower = orderDirOrLimit.toLowerCase();
+      if (lower === 'asc' || lower === 'desc') {
+        orderDirection = lower;
+        rawLimit = possibleLimit;
+      } else {
+        const parsed = parseInt(orderDirOrLimit, 10);
+        rawLimit = isNaN(parsed) ? 50 : parsed;
+      }
+    }
+
+    const safeLimit = (typeof rawLimit === 'number' && !isNaN(rawLimit)) ? rawLimit : (parseInt(rawLimit, 10) || 50);
+
     try {
       let orderedQuery = query;
       if (orderByField) {
-        orderedQuery = orderedQuery.orderBy(orderByField, 'desc');
+        orderedQuery = orderedQuery.orderBy(orderByField, orderDirection);
       }
-      if (limit) {
-        orderedQuery = orderedQuery.limit(limit);
+      if (safeLimit && safeLimit > 0) {
+        orderedQuery = orderedQuery.limit(safeLimit);
       }
       const snapshot = await orderedQuery.get();
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -192,12 +218,12 @@ module.exports = {
           docs.sort((a, b) => {
             const timeA = a[orderByField] ? new Date(a[orderByField]).getTime() : 0;
             const timeB = b[orderByField] ? new Date(b[orderByField]).getTime() : 0;
-            return timeB - timeA;
+            return orderDirection === 'asc' ? (timeA - timeB) : (timeB - timeA);
           });
         }
 
-        if (limit && limit > 0) {
-          docs = docs.slice(0, limit);
+        if (safeLimit && safeLimit > 0) {
+          docs = docs.slice(0, safeLimit);
         }
         return docs;
       }

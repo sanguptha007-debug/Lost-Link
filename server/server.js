@@ -96,12 +96,83 @@ const reportsRoutes = require('./routes/reports');
 const matchesRoutes = require('./routes/matches');
 const contactRoutes = require('./routes/contact');
 const usersRoutes = require('./routes/users');
+const notificationsRoutes = require('./routes/notifications');
+const { requireAuth } = require('./middleware/authMiddleware');
 
 app.use('/api/ai', aiRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/matches', matchesRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/notifications', notificationsRoutes);
+
+// Admin Moderation Route: View flagged/suspicious reports (Admin authorization only)
+app.get('/api/admin/flagged-reports', requireAuth, async (req, res) => {
+  try {
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    const isAdmin = req.user.role === 'admin' || adminEmails.includes((req.user.email || '').toLowerCase());
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Administrative privileges required.' });
+    }
+
+    const firebaseService = require('./services/firebaseService');
+    const flagged = await firebaseService.queryDocs(
+      'items',
+      [{ field: 'isFlagged', op: '==', value: true }],
+      'createdAt',
+      'desc',
+      50
+    );
+
+    // Sanitize flagged reports: prevent exposure of student private contact info
+    const sanitizedReports = (flagged || []).map(r => ({
+      id: r.id,
+      title: r.title,
+      type: r.type,
+      description: r.description,
+      location: r.location,
+      date: r.date,
+      status: r.status,
+      riskScore: r.riskScore || 0,
+      riskFlags: r.riskFlags || [],
+      isFlagged: r.isFlagged,
+      createdAt: r.createdAt
+    }));
+
+    res.json({ success: true, count: sanitizedReports.length, flaggedReports: sanitizedReports });
+  } catch (err) {
+    console.error('[Admin] Flagged reports error:', err);
+    res.status(500).json({ error: 'Failed to retrieve flagged reports.' });
+  }
+});
+
+// Admin Moderation Route: Resolve/dismiss a flagged report
+app.post('/api/admin/flagged-reports/:id/review', requireAuth, async (req, res) => {
+  try {
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    const isAdmin = req.user.role === 'admin' || adminEmails.includes((req.user.email || '').toLowerCase());
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Administrative privileges required.' });
+    }
+
+    const { action, notes } = req.body; // 'dismiss' | 'confirm'
+    const { id } = req.params;
+    const firebaseService = require('./services/firebaseService');
+
+    await firebaseService.updateDoc('items', id, {
+      isFlagged: action === 'confirm',
+      moderationStatus: action === 'dismiss' ? 'dismissed' : 'flagged_confirmed',
+      moderatedAt: new Date().toISOString(),
+      moderatedBy: req.user.email,
+      moderatorNotes: notes || ''
+    });
+
+    res.json({ success: true, message: `Report review status updated (${action}).` });
+  } catch (err) {
+    console.error('[Admin] Review report error:', err);
+    res.status(500).json({ error: 'Failed to update report status.' });
+  }
+});
 
 // ---- SPA fallback: serve index.html for unmatched routes ----
 app.get('*', (req, res) => {

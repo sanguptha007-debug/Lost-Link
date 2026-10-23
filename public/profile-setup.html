@@ -8,8 +8,20 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/auth.css">
   <link rel="stylesheet" href="css/responsive.css">
+  <script>
+    (function() {
+      var saved = localStorage.getItem('lostlink_theme');
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = saved || (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
 </head>
 <body class="auth-body">
+
+  <div style="position: absolute; top: 16px; right: 16px; z-index: 100;">
+    <button type="button" class="theme-toggle-btn" id="themeToggle" aria-label="Toggle Theme" title="Toggle Dark/Light Mode"></button>
+  </div>
 
   <div class="auth-page">
     <div class="auth-brand">
@@ -69,6 +81,7 @@
 
   <script src="js/utils.js"></script>
   <script src="js/firebase-config.js"></script>
+  <script src="js/theme.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const emailInput = document.getElementById('setupEmail');

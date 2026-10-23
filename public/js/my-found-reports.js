@@ -31,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+let currentFoundReports = [];
+
 async function loadMyFoundReports(userId) {
   const list = document.getElementById('foundReportsList');
   if (!list) return;
@@ -38,6 +40,7 @@ async function loadMyFoundReports(userId) {
   try {
     const data = await LostLink.api(`/api/reports?type=found&userId=${userId}`);
     const reports = data.items || [];
+    currentFoundReports = reports;
 
     if (reports.length === 0) {
       list.innerHTML = `
@@ -53,11 +56,11 @@ async function loadMyFoundReports(userId) {
     }
 
     list.innerHTML = reports.map(r => `
-      <div class="report-card" id="found-report-${r.id}" style="background: #ffffff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: var(--space-5); box-shadow: var(--shadow-sm);">
+      <div class="report-card" id="found-report-${r.id}">
         <div style="display: flex; gap: var(--space-4); flex-wrap: wrap;">
           ${r.imageUrl ? `
             <div class="card-image-wrap" style="width: 110px; height: 110px; flex-shrink: 0; cursor: zoom-in;" title="Click to view full image" onclick="LostLink.openImageModal('${LostLink.sanitize(r.imageUrl)}', '${LostLink.sanitize(r.title)}')">
-              <img src="${LostLink.sanitize(r.imageUrl)}" alt="${LostLink.sanitize(r.title)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-md);">
+              <img src="${LostLink.sanitize(r.imageUrl)}" alt="${LostLink.sanitize(r.title)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-md);" loading="lazy" decoding="async">
             </div>
           ` : `
             <div style="width: 110px; height: 110px; flex-shrink: 0; background: var(--gray-100); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); color: var(--gray-500); text-align: center; padding: 6px;">
@@ -180,15 +183,30 @@ window.saveFoundPossessionStatus = async function(id) {
   }
 };
 
-window.deleteFoundReport = async function(reportId) {
-  if (!confirm('Are you sure you want to delete this found report? This will also remove the associated photo.')) return;
-  try {
-    await LostLink.api(`/api/reports/${reportId}`, {
-      method: 'DELETE'
-    });
-    LostLink.showToast('Report deleted.', 'info');
-    document.getElementById(`found-report-${reportId}`)?.remove();
-  } catch (err) {
-    LostLink.showToast(err.message || 'Failed to delete report.', 'error');
-  }
+window.deleteFoundReport = function(reportId, optionalTitle) {
+  const report = currentFoundReports.find(r => r.id === reportId);
+  const title = optionalTitle || (report ? report.title : 'Found Item');
+
+  LostLink.confirmReportDeletion({
+    reportId,
+    title,
+    type: 'found',
+    onConfirmed: () => {
+      currentFoundReports = currentFoundReports.filter(r => r.id !== reportId);
+      const card = document.getElementById(`found-report-${reportId}`);
+      if (card) card.remove();
+      const list = document.getElementById('foundReportsList');
+      if (list && (list.querySelectorAll('.report-card').length === 0 || currentFoundReports.length === 0)) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <h3 class="empty-state-title">No Found Reports Yet</h3>
+            <p class="empty-state-desc">You have not submitted any found item reports yet.</p>
+            <div style="margin-top: var(--space-4);">
+              <a href="report-found.html" class="btn btn-primary btn-sm">Report a Found Item</a>
+            </div>
+          </div>
+        `;
+      }
+    }
+  });
 };

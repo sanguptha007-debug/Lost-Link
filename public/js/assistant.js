@@ -86,7 +86,7 @@ function appendBubble(content, role, items = []) {
       <div class="assistant-matched-items" style="margin-top: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2);">
         <span style="font-size: var(--text-xs); font-weight: 600; color: var(--gray-700); text-transform: uppercase; letter-spacing: 0.5px;">Real Matching Reports in Database:</span>
         ${items.map(item => `
-          <div class="assistant-item-card" style="display: flex; gap: var(--space-3); background: #ffffff; border: 1px solid var(--gray-200); border-radius: var(--radius-md); padding: var(--space-3); align-items: center;">
+          <div class="assistant-item-card">
             ${item.imageUrl ? `
               <div class="card-image-wrap" style="width: 60px; height: 60px; flex-shrink: 0; cursor: zoom-in;" title="Click to enlarge" onclick="event.stopPropagation(); LostLink.openImageModal('${LostLink.sanitize(item.imageUrl)}', '${LostLink.sanitize(item.title)}')">
                 <img src="${LostLink.sanitize(item.imageUrl)}" alt="${LostLink.sanitize(item.title)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">

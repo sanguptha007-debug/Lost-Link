@@ -8,49 +8,64 @@
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-let provider = 'none'; // 'gemini' | 'groq' | 'none'
-let genAI = null;
-let currentModelName = 'gemini-3.6-flash';
-let geminiModel = null;
+let provider = 'none'; // 'gemini' | 'groq' | 'multi' | 'none'
+let genAI = null;              // Tier 1: Primary Gemini
+let tertiaryGenAI = null;      // Tier 3: Tertiary Gemini backup
+let currentModelName = 'gemini-3.7-flash';
 let isConfigured = false;
 
 const GEMINI_FALLBACK_MODELS = [
   process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : null,
-  'gemini-flash-latest',
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
   'gemini-3.8-flash',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
   'gemini-3.7-flash',
-  'gemini-3.6-flash'
+  'gemini-flash-latest'
 ].filter(Boolean);
 
 function initAI() {
-  const chosenProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase();
-
-  if ((chosenProvider === 'groq' || !process.env.GEMINI_API_KEY) && process.env.GROQ_API_KEY) {
-    provider = 'groq';
-    isConfigured = true;
-    console.log('[AI Service] Initialized with Groq provider');
-    return;
-  }
-
+  // Tier 1: Primary Gemini Key
   if (process.env.GEMINI_API_KEY) {
     try {
       genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY.trim());
-      currentModelName = process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : 'gemini-3.6-flash';
-      geminiModel = genAI.getGenerativeModel({ model: currentModelName });
-      provider = 'gemini';
-      isConfigured = true;
-      console.log(`[AI Service] Initialized with Gemini model: ${currentModelName}`);
+      currentModelName = process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : 'gemini-3.7-flash';
+      console.log(`[AI Service] Tier 1 initialized (Primary Gemini): ${currentModelName}`);
     } catch (err) {
-      console.error('[AI Service] Gemini initialization error:', err.message);
-      isConfigured = false;
+      console.error('[AI Service] Primary Gemini init error:', err.message);
     }
-  } else {
-    provider = 'none';
-    isConfigured = false;
-    console.log('[AI Service] No AI provider key configured in .env.');
   }
+
+  // Tier 2: Groq Cloud Key 1 / OpenAI Compatible Key
+  if (process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY) {
+    console.log('[AI Service] Tier 2 initialized (Groq Cloud Primary / OpenAI)');
+  }
+
+  // Tier 3: Groq Cloud Key 2 (if configured)
+  if (process.env.GROQ_API_KEY2) {
+    console.log('[AI Service] Tier 3 initialized (Groq Cloud Secondary)');
+  }
+
+  // Tier 4: Backup Gemini Key
+  const backupKey = (process.env.GEMINI_API_KEY_BACKUP || process.env.AI_KEY_TERTIARY || '').trim();
+  if (backupKey) {
+    try {
+      tertiaryGenAI = new GoogleGenerativeAI(backupKey);
+      console.log('[AI Service] Backup Gemini initialized');
+    } catch (err) {
+      console.error('[AI Service] Backup Gemini init error:', err.message);
+    }
+  }
+
+  isConfigured = Boolean(genAI || process.env.GROQ_API_KEY || process.env.GROQ_API_KEY2 || process.env.OPENAI_API_KEY || tertiaryGenAI);
+  provider = isConfigured ? 'multi' : 'none';
+  console.log('[AI Service] Multi-Provider Fallback Ready:', {
+    tier1_primary_gemini: Boolean(genAI),
+    tier2_groq_primary: Boolean(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY),
+    tier3_groq_secondary: Boolean(process.env.GROQ_API_KEY2),
+    tier4_backup_gemini: Boolean(tertiaryGenAI)
+  });
 }
 
 initAI();
@@ -83,21 +98,19 @@ function parseAIJSON(text) {
 }
 
 /**
- * Robust execution with Gemini model fallback if 429 quota, 503 high demand, or 404 occurs.
- * Protects serverless functions by enforcing an 8-second execution timeout per call.
+ * Execute Gemini call with timeout and model fallback
  */
-async function callGeminiWithFallback(promptOrParts) {
-  if (!genAI) throw new Error('Gemini not initialized');
+async function callGeminiClient(clientInstance, promptOrParts, timeoutMs = 5000) {
+  if (!clientInstance) throw new Error('Gemini client not initialized');
 
-  // Try current model and at most 1 alternate fallback model with 5s timeout each
-  const modelsToTry = [currentModelName, ...GEMINI_FALLBACK_MODELS.filter(m => m !== currentModelName)].slice(0, 2);
+  const modelsToTry = [currentModelName, ...GEMINI_FALLBACK_MODELS.filter(m => m !== currentModelName)].slice(0, 4);
   let lastErr = null;
 
   for (const mName of modelsToTry) {
     try {
-      const activeModel = genAI.getGenerativeModel({ model: mName });
+      const activeModel = clientInstance.getGenerativeModel({ model: mName });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Gemini model "${mName}" timed out after 5s`)), 5000)
+        setTimeout(() => reject(new Error(`Gemini model "${mName}" timed out after ${timeoutMs}ms`)), timeoutMs)
       );
 
       const result = await Promise.race([
@@ -105,29 +118,27 @@ async function callGeminiWithFallback(promptOrParts) {
         timeoutPromise
       ]);
 
-      currentModelName = mName; // remember working model
-      return result.response.text();
+      currentModelName = mName;
+      const text = result?.response?.text();
+      if (typeof text === 'string' && text.trim().length > 0) {
+        return text.trim();
+      }
+      throw new Error(`Gemini model "${mName}" returned an empty response`);
     } catch (err) {
       lastErr = err;
-      const msg = (err.message || '').toLowerCase();
-      const isTransientOrUnavailable = (
-        msg.includes('429') ||
-        msg.includes('404') ||
-        msg.includes('503') ||
-        msg.includes('500') ||
-        msg.includes('502') ||
-        msg.includes('quota') ||
-        msg.includes('high demand') ||
-        msg.includes('overloaded') ||
-        msg.includes('service unavailable') ||
-        msg.includes('timed out') ||
-        msg.includes('timeout')
-      );
-      if (isTransientOrUnavailable) {
-        console.warn(`[AI Service] Gemini model "${mName}" unavailable (${err.message.slice(0, 90)}). Trying alternate model...`);
-        continue;
+      console.warn(`[AI Service] Model "${mName}" warning: ${err.message.slice(0, 90)}`);
+      if (err.message && (
+        err.message.includes('API_KEY_INVALID') ||
+        err.message.includes('API key not valid') ||
+        err.message.includes('401') ||
+        err.message.includes('403') ||
+        err.message.includes('429') ||
+        err.message.includes('Quota exceeded') ||
+        err.message.includes('ResourceExhausted') ||
+        err.message.includes('RESOURCE_EXHAUSTED')
+      )) {
+        break;
       }
-      throw err;
     }
   }
 
@@ -135,56 +146,150 @@ async function callGeminiWithFallback(promptOrParts) {
 }
 
 /**
- * Call Groq chat completion API (OpenAI compatible)
+ * Call Groq / OpenAI compatible Chat Completion API
  */
-async function callGroqChat(messages, maxTokens = 1000) {
-  const apiKey = (process.env.GROQ_API_KEY || '').trim();
-  if (!apiKey) throw new Error('GROQ_API_KEY not configured');
-  const groqModel = process.env.GROQ_MODEL ? process.env.GROQ_MODEL.trim() : 'llama-3.3-70b-versatile';
+async function callGroqChat(messages, maxTokens = 1000, timeoutMs = 6000, specificApiKey = null) {
+  const apiKey = (specificApiKey || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+  if (!apiKey) throw new Error('Groq/OpenAI API key is not configured');
 
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: groqModel,
-      messages,
-      temperature: 0.2,
-      max_tokens: maxTokens
-    })
-  });
+  const isGroq = apiKey.startsWith('gsk_') || Boolean(process.env.GROQ_API_KEY);
+  const endpoint = isGroq ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Groq API error (${res.status}): ${errText}`);
+  // Supported Groq models with auto-fallback
+  const candidateModels = isGroq
+    ? [process.env.GROQ_MODEL, 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'].filter(Boolean)
+    : [process.env.OPENAI_MODEL, 'gpt-4o-mini'].filter(Boolean);
+
+  let lastError = null;
+
+  for (const model of candidateModels) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.2,
+          max_tokens: maxTokens
+        })
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        // If 404 model not found, try next candidate model
+        if (res.status === 404) {
+          lastError = new Error(`Model ${model} not available on Groq (HTTP 404)`);
+          continue;
+        }
+        throw new Error(`Chat API error (${res.status}): ${errText.slice(0, 100)}`);
+      }
+
+      const data = await res.json();
+      const content = data?.choices?.[0]?.message?.content;
+      if (typeof content === 'string' && content.trim().length > 0) {
+        return content.trim();
+      }
+      throw new Error('Chat API returned an empty completion content');
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastError = err;
+      // If 429 quota or 401/403 auth error, do not retry other models with the same key
+      if (err.message && (err.message.includes('401') || err.message.includes('403') || err.message.includes('429'))) {
+        throw err;
+      }
+    }
   }
 
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  throw lastError || new Error('All candidate chat models failed');
 }
 
 /**
- * General unified text prompt runner
+ * Multi-Provider Sequential Fallback Prompt Runner:
+ * 1. Tier 1: Primary Gemini (GEMINI_API_KEY)
+ * 2. Tier 2: Groq Cloud Primary (GROQ_API_KEY / OPENAI_API_KEY)
+ * 3. Tier 3: Groq Cloud Secondary (GROQ_API_KEY2, if provided)
+ * 4. Tier 4: Backup Gemini (GEMINI_API_KEY_BACKUP / AI_KEY_TERTIARY)
  */
 async function runAIPrompt(prompt, systemInstruction = '') {
   if (!isConfigured) {
-    throw new Error('AI provider is not configured.');
+    throw new Error('No AI providers configured in server environment.');
   }
 
-  if (provider === 'groq') {
-    const messages = [];
-    if (systemInstruction) {
-      messages.push({ role: 'system', content: systemInstruction });
-    }
-    messages.push({ role: 'user', content: prompt });
-    return callGroqChat(messages, 1000);
-  }
-
-  // Gemini
   const fullPrompt = systemInstruction ? `${systemInstruction}\n\n${prompt}` : prompt;
-  return callGeminiWithFallback(fullPrompt);
+  const messages = [];
+  if (systemInstruction) {
+    messages.push({ role: 'system', content: systemInstruction });
+  }
+  messages.push({ role: 'user', content: prompt });
+
+  const errors = [];
+
+  // TIER 1: Primary Gemini
+  if (genAI) {
+    try {
+      const res = await callGeminiClient(genAI, fullPrompt, 5000);
+      if (res) return res;
+    } catch (err1) {
+      console.warn(`[AI Fallback] Tier 1 (Primary Gemini) unavailable: ${err1.message.slice(0, 80)}. Escalating to Tier 2...`);
+      errors.push(`Tier 1: ${err1.message}`);
+    }
+  }
+
+  // TIER 2: Groq Cloud Primary (or OpenAI)
+  const groqKey1 = (process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+  if (groqKey1) {
+    try {
+      const res = await callGroqChat(messages, 1000, 5000, groqKey1);
+      if (res) {
+        console.log('[AI Fallback] Tier 2 (Groq Cloud Primary) succeeded.');
+        return res;
+      }
+    } catch (err2) {
+      console.warn(`[AI Fallback] Tier 2 (Groq Primary) failed: ${err2.message.slice(0, 80)}. Escalating to next provider...`);
+      errors.push(`Tier 2: ${err2.message}`);
+    }
+  }
+
+  // TIER 3: Groq Cloud Secondary (if configured)
+  const groqKey2 = (process.env.GROQ_API_KEY2 || '').trim();
+  if (groqKey2) {
+    try {
+      const res = await callGroqChat(messages, 1000, 5000, groqKey2);
+      if (res) {
+        console.log('[AI Fallback] Tier 3 (Groq Cloud Secondary) succeeded.');
+        return res;
+      }
+    } catch (err3) {
+      console.warn(`[AI Fallback] Tier 3 (Groq Secondary) failed: ${err3.message.slice(0, 80)}. Escalating to Backup Gemini...`);
+      errors.push(`Tier 3: ${err3.message}`);
+    }
+  }
+
+  // TIER 4: Backup Gemini
+  if (tertiaryGenAI) {
+    try {
+      const res = await callGeminiClient(tertiaryGenAI, fullPrompt, 5000);
+      if (res) {
+        console.log('[AI Fallback] Tier 4 (Backup Gemini) succeeded.');
+        return res;
+      }
+    } catch (err4) {
+      console.warn(`[AI Fallback] Tier 4 (Backup Gemini) failed: ${err4.message.slice(0, 80)}.`);
+      errors.push(`Tier 4: ${err4.message}`);
+    }
+  }
+
+  throw new Error(`All configured AI providers failed to respond: ${errors.join(' | ')}`);
 }
 
 /**

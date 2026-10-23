@@ -14,6 +14,8 @@ const firebaseService = require('../services/firebaseService');
 const geminiService = require('../services/geminiService');
 const supabaseStorageService = require('../services/supabaseStorageService');
 const matchingService = require('../services/matchingService');
+const duplicateDetectionService = require('../services/duplicateDetectionService');
+const suspiciousDetectionService = require('../services/suspiciousDetectionService');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -42,7 +44,8 @@ router.post('/', requireAuth, upload.single('image'), async (req, res) => {
       time,
       color,
       currentStatus,
-      securityDetails
+      securityDetails,
+      confirmDuplicate
     } = req.body;
 
     if (!description || description.trim().length < 5) {
@@ -50,6 +53,61 @@ router.post('/', requireAuth, upload.single('image'), async (req, res) => {
     }
     if (!type || !['lost', 'found'].includes(type)) {
       return res.status(400).json({ error: 'Type must be "lost" or "found".' });
+    }
+
+    // 1. Duplicate Report Detection (unless user confirmed submission)
+    if (confirmDuplicate !== 'true') {
+      try {
+        const existingReports = await firebaseService.queryDocs(
+          'items',
+          [{ field: 'type', op: '==', value: type }],
+          'createdAt',
+          'desc',
+          50
+        );
+        const duplicateCheck = duplicateDetectionService.detectDuplicate({
+          title,
+          description,
+          type,
+          location,
+          date,
+          color,
+          userId: req.user.uid
+        }, existingReports);
+
+        if (duplicateCheck.isDuplicate) {
+          return res.status(409).json({
+            error: 'A similar report has already been submitted on campus.',
+            potentialDuplicate: true,
+            similarity: duplicateCheck.similarity,
+            matchedReport: duplicateCheck.matchedReport,
+            matches: [duplicateCheck.matchedReport],
+            message: 'A similar report has already been submitted on campus.'
+          });
+        }
+      } catch (dupErr) {
+        console.warn('[Reports] Duplicate check warning:', dupErr.message);
+      }
+    }
+
+    // 2. Suspicious / Fake Report Signal Assessment
+    let suspiciousResult = { isFlagged: false, riskScore: 0, riskFlags: [] };
+    try {
+      const userRecentReports = await firebaseService.queryDocs(
+        'items',
+        [{ field: 'userId', op: '==', value: req.user.uid }],
+        'createdAt',
+        'desc',
+        10
+      );
+      suspiciousResult = suspiciousDetectionService.assessSuspiciousReport({
+        title,
+        description,
+        location,
+        userId: req.user.uid
+      }, userRecentReports);
+    } catch (suspErr) {
+      console.warn('[Reports] Suspicious assessment warning:', suspErr.message);
     }
 
     // Handle optional image upload to Private Supabase Storage
@@ -115,6 +173,9 @@ router.post('/', requireAuth, upload.single('image'), async (req, res) => {
       color: color || aiAnalysis?.color || null,
       storagePath: uploadedStoragePath,
       status: validStatus === 'returned_to_owner' ? 'resolved' : 'active',
+      isFlagged: suspiciousResult.isFlagged,
+      riskScore: suspiciousResult.riskScore,
+      riskFlags: suspiciousResult.riskFlags,
       ...(type === 'found' ? {
         currentStatus: validStatus,
         securityDetails: validStatus === 'with_security' ? (securityDetails || '').trim() : ''
@@ -151,6 +212,37 @@ router.post('/', requireAuth, upload.single('image'), async (req, res) => {
         potentialMatches = matchRes.matches || [];
       } else {
         potentialMatches = await matchingService.findMatchingLostReportsForFoundItem(saved);
+      }
+
+      // Generate Match Notifications for matching report owners (score >= 60)
+      for (const match of potentialMatches) {
+        const matchScore = Math.round(match.score || 0);
+        if (matchScore >= 60 && match.userId && match.userId !== req.user.uid) {
+          const deduplicationKey = [saved.id, match.id].sort().join('_');
+          try {
+            const existingNotifs = await firebaseService.queryDocs('notifications', [
+              { field: 'reportPair', op: '==', value: deduplicationKey }
+            ], null, null, 1);
+
+            if (!existingNotifs || existingNotifs.length === 0) {
+              await firebaseService.addDoc('notifications', {
+                userId: match.userId,
+                type: 'match',
+                title: 'Potential Match Found',
+                message: `A new ${saved.type} report "${saved.title}" at ${saved.location} matches your ${match.type} report with ${matchScore}% confidence.`,
+                targetReportId: saved.id,
+                sourceReportId: match.id,
+                matchScore,
+                reportPair: deduplicationKey,
+                read: false,
+                createdAt: now
+              });
+              console.log(`[Notifications] Created match notification for user ${match.userId} (pair: ${deduplicationKey})`);
+            }
+          } catch (notifErr) {
+            console.warn('[Notifications] Error creating match notification:', notifErr.message);
+          }
+        }
       }
     } catch (mErr) {
       console.warn('[Reports] Matching check warning:', mErr.message);
@@ -215,7 +307,12 @@ router.get('/', optionalAuth, async (req, res) => {
         currentStatus: item.currentStatus || (item.type === 'found' ? 'with_finder' : undefined),
         securityDetails: item.securityDetails || '',
         createdAt: item.createdAt,
-        isOwner: req.user && item.userId === req.user.uid
+        isOwner: Boolean(req.user && (
+          (item.userId && item.userId === req.user.uid) ||
+          (item.uid && item.uid === req.user.uid) ||
+          (item.userEmail && req.user.email && item.userEmail.toLowerCase() === req.user.email.toLowerCase()) ||
+          (req.user.role === 'admin')
+        ))
       };
     }));
 
@@ -239,7 +336,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
       resolvedUrl = await supabaseStorageService.getSignedPhotoUrl(item.storagePath, 900) || resolvedUrl;
     }
 
-    const isOwner = req.user && item.userId === req.user.uid;
+    const isOwner = Boolean(req.user && (
+      (item.userId && item.userId === req.user.uid) ||
+      (item.uid && item.uid === req.user.uid) ||
+      (item.userEmail && req.user.email && item.userEmail.toLowerCase() === req.user.email.toLowerCase()) ||
+      (req.user.role === 'admin')
+    ));
 
     res.json({
       success: true,
@@ -328,7 +430,14 @@ router.delete('/:id', requireAuth, async (req, res) => {
     if (!item) {
       return res.status(404).json({ error: 'Report not found.' });
     }
-    if (item.userId !== req.user.uid && req.user.role !== 'admin') {
+    const isOwner = Boolean(
+      (item.userId && item.userId === req.user.uid) ||
+      (item.uid && item.uid === req.user.uid) ||
+      (item.userEmail && req.user.email && item.userEmail.toLowerCase() === req.user.email.toLowerCase()) ||
+      (req.user.role === 'admin')
+    );
+
+    if (!isOwner) {
       return res.status(403).json({ error: 'You can only delete your own reports.' });
     }
 

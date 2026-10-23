@@ -13,7 +13,15 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
+  // Load item details
   loadItemDetails(itemId);
+
+  // When auth state settles, reload details with token so ownership is verified and owner actions (Delete/Resolve) display
+  if (LostLink.onAuthStateChanged) {
+    LostLink.onAuthStateChanged(() => {
+      loadItemDetails(itemId);
+    });
+  }
 });
 
 async function loadItemDetails(itemId) {
@@ -142,9 +150,14 @@ function renderItemDetails(item) {
                 Request Contact
               </button>
             ` : `
-              <button type="button" class="btn btn-outline btn-sm" onclick="markReportResolved('${item.id}')">
-                ${item.status === 'resolved' ? 'Report Resolved' : 'Mark as Resolved'}
-              </button>
+              <div style="display: flex; gap: var(--space-2); flex-wrap: wrap;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="markReportResolved('${item.id}')">
+                  ${item.status === 'resolved' ? 'Report Resolved' : 'Mark as Resolved'}
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm" style="color: var(--danger);" onclick="deleteCurrentReport()">
+                  Delete Report
+                </button>
+              </div>
             `}
           </div>
         </div>
@@ -348,4 +361,16 @@ window.submitContactRequest = async function() {
   } finally {
     LostLink.setLoading(btn, false);
   }
+};
+
+window.deleteCurrentReport = function() {
+  if (!currentItem) return;
+  LostLink.confirmReportDeletion({
+    reportId: currentItem.id,
+    title: currentItem.title,
+    type: currentItem.type,
+    onConfirmed: () => {
+      window.location.href = currentItem.type === 'found' ? 'my-found-reports.html' : 'my-lost-reports.html';
+    }
+  });
 };
