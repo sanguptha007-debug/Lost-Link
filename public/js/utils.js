@@ -91,7 +91,20 @@ LostLink.api = async function(endpoint, options = {}) {
   }
 
   try {
-    const response = await fetch(url, config);
+    let response = await fetch(url, config);
+
+    // If 401 and student is logged in, attempt a single token refresh before erroring
+    if (response.status === 401 && !options._retried && LostLink.auth && LostLink.auth.currentUser) {
+      try {
+        const freshToken = await LostLink.auth.currentUser.getIdToken(true);
+        if (freshToken) {
+          headers['Authorization'] = `Bearer ${freshToken}`;
+          response = await fetch(url, { ...config, headers, _retried: true });
+        }
+      } catch (refreshErr) {
+        console.warn('[LostLink] Token refresh error:', refreshErr.message);
+      }
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

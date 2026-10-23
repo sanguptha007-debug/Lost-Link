@@ -223,9 +223,13 @@ window.markReportResolved = async function(id) {
   if (!confirm('Mark this report as resolved?')) return;
 
   try {
+    const payload = { status: 'resolved' };
+    if (currentItem && currentItem.type === 'found') {
+      payload.currentStatus = 'returned_to_owner';
+    }
     await LostLink.api(`/api/reports/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ status: 'resolved', currentStatus: 'returned_to_owner' })
+      body: JSON.stringify(payload)
     });
     LostLink.showToast('Report marked as resolved.', 'success');
     loadItemDetails(id);

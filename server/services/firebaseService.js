@@ -30,43 +30,45 @@ function initialize() {
       }
     }
 
-    if (serviceAccount) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET
-      });
-    } else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
-      let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
-      if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
-        privateKey = privateKey.slice(1, -1).trim();
-      }
-      if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
-        try {
-          const decoded = Buffer.from(privateKey, 'base64').toString('utf8');
-          if (decoded.includes('-----BEGIN PRIVATE KEY-----')) {
-            privateKey = decoded.trim();
-          }
-        } catch (_) {}
-      }
-      privateKey = privateKey.replace(/\\n/g, '\n');
+    if (!admin.apps.length) {
+      if (serviceAccount) {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+          storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+        });
+      } else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+        let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
+        if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+          privateKey = privateKey.slice(1, -1).trim();
+        }
+        if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+          try {
+            const decoded = Buffer.from(privateKey, 'base64').toString('utf8');
+            if (decoded.includes('-----BEGIN PRIVATE KEY-----')) {
+              privateKey = decoded.trim();
+            }
+          } catch (_) {}
+        }
+        privateKey = privateKey.replace(/\\n/g, '\n');
 
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID.trim(),
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL.trim(),
-          privateKey
-        }),
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET
-      });
-    } else {
-      const missing = [];
-      if (!process.env.FIREBASE_PROJECT_ID) missing.push('FIREBASE_PROJECT_ID');
-      if (!process.env.FIREBASE_CLIENT_EMAIL) missing.push('FIREBASE_CLIENT_EMAIL');
-      if (!process.env.FIREBASE_PRIVATE_KEY) missing.push('FIREBASE_PRIVATE_KEY');
-      initError = `Firebase Admin credentials not configured in environment. Missing: ${missing.join(', ')}`;
-      console.error('  [Firebase] ' + initError);
-      initialized = true;
-      return;
+        admin.initializeApp({
+          credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID.trim(),
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL.trim(),
+            privateKey
+          }),
+          storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+        });
+      } else {
+        const missing = [];
+        if (!process.env.FIREBASE_PROJECT_ID) missing.push('FIREBASE_PROJECT_ID');
+        if (!process.env.FIREBASE_CLIENT_EMAIL) missing.push('FIREBASE_CLIENT_EMAIL');
+        if (!process.env.FIREBASE_PRIVATE_KEY) missing.push('FIREBASE_PRIVATE_KEY');
+        initError = `Firebase Admin credentials not configured in environment. Missing: ${missing.join(', ')}`;
+        console.error('  [Firebase] ' + initError);
+        initialized = true;
+        return;
+      }
     }
 
     db = admin.firestore();

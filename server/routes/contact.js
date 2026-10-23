@@ -22,7 +22,7 @@ router.post('/request', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Item not found.' });
     }
 
-    const recipientId = toUserId || item.userId;
+    const recipientId = item.userId;
     if (recipientId === req.user.uid) {
       return res.status(400).json({ error: 'Cannot send contact request to yourself.' });
     }

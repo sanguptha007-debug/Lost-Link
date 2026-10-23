@@ -43,20 +43,27 @@ if (process.env.NODE_ENV !== 'production') {
 // ---- Health Check ----
 app.get('/api/health', (req, res) => {
   const fbService = require('./services/firebaseService');
-  res.json({
-    status: 'ok',
+  const spService = require('./services/supabaseStorageService');
+  const aiService = require('./services/geminiService');
+
+  const isHealthy = fbService.isAvailable;
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'ok' : 'degraded',
     service: 'LostLink API',
     version: '2.0.0',
     timestamp: new Date().toISOString(),
-    firebaseAdmin: {
-      isAvailable: fbService.isAvailable,
-      initError: fbService.initError || null,
-      hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
-      projectId: process.env.FIREBASE_PROJECT_ID ? process.env.FIREBASE_PROJECT_ID.substring(0, 5) + '...' : null,
-      hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
-      hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
-      privateKeyLength: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.length : 0,
-      hasServiceAccountPath: !!process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+    services: {
+      firebaseAdmin: {
+        isAvailable: fbService.isAvailable,
+        initError: fbService.initError || null
+      },
+      supabaseStorage: {
+        isConfigured: spService.isConfigured()
+      },
+      aiService: {
+        isAvailable: aiService.isAvailable(),
+        provider: aiService.getProvider()
+      }
     }
   });
 });

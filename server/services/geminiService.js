@@ -16,9 +16,12 @@ let isConfigured = false;
 
 const GEMINI_FALLBACK_MODELS = [
   process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : null,
-  'gemini-3.6-flash',
+  'gemini-flash-latest',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-3.8-flash',
   'gemini-3.7-flash',
-  'gemini-1.5-flash'
+  'gemini-3.6-flash'
 ].filter(Boolean);
 
 function initAI() {
@@ -80,25 +83,48 @@ function parseAIJSON(text) {
 }
 
 /**
- * Robust execution with Gemini model fallback if 429 quota or 404 occurs
+ * Robust execution with Gemini model fallback if 429 quota, 503 high demand, or 404 occurs.
+ * Protects serverless functions by enforcing an 8-second execution timeout per call.
  */
 async function callGeminiWithFallback(promptOrParts) {
   if (!genAI) throw new Error('Gemini not initialized');
 
-  const modelsToTry = [currentModelName, ...GEMINI_FALLBACK_MODELS.filter(m => m !== currentModelName)];
+  // Try current model and at most 1 alternate fallback model with 5s timeout each
+  const modelsToTry = [currentModelName, ...GEMINI_FALLBACK_MODELS.filter(m => m !== currentModelName)].slice(0, 2);
   let lastErr = null;
 
   for (const mName of modelsToTry) {
     try {
       const activeModel = genAI.getGenerativeModel({ model: mName });
-      const result = await activeModel.generateContent(promptOrParts);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Gemini model "${mName}" timed out after 5s`)), 5000)
+      );
+
+      const result = await Promise.race([
+        activeModel.generateContent(promptOrParts),
+        timeoutPromise
+      ]);
+
       currentModelName = mName; // remember working model
       return result.response.text();
     } catch (err) {
       lastErr = err;
-      const isQuotaOrNotFound = err.message && (err.message.includes('429') || err.message.includes('404') || err.message.includes('quota'));
-      if (isQuotaOrNotFound) {
-        console.warn(`[AI Service] Gemini model "${mName}" rate-limited or unavailable. Trying alternate model...`);
+      const msg = (err.message || '').toLowerCase();
+      const isTransientOrUnavailable = (
+        msg.includes('429') ||
+        msg.includes('404') ||
+        msg.includes('503') ||
+        msg.includes('500') ||
+        msg.includes('502') ||
+        msg.includes('quota') ||
+        msg.includes('high demand') ||
+        msg.includes('overloaded') ||
+        msg.includes('service unavailable') ||
+        msg.includes('timed out') ||
+        msg.includes('timeout')
+      );
+      if (isTransientOrUnavailable) {
+        console.warn(`[AI Service] Gemini model "${mName}" unavailable (${err.message.slice(0, 90)}). Trying alternate model...`);
         continue;
       }
       throw err;
@@ -271,7 +297,11 @@ Return ONLY valid JSON array:
     if (Array.isArray(rankedList) && rankedList.length > 0) {
       const scoredCandidates = [];
       for (const item of rankedList) {
-        const candidate = candidates[item.candidateIndex];
+        const cIdx = parseInt(item.candidateIndex, 10);
+        let candidate = !isNaN(cIdx) ? candidates[cIdx] : null;
+        if (!candidate && item.id) {
+          candidate = candidates.find(c => c.id === item.id);
+        }
         const score = Math.min(100, Math.max(0, parseInt(item.score, 10) || 0));
         // Only include candidates that actually match (score >= 25)
         if (candidate && score >= 25) {

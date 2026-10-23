@@ -29,6 +29,14 @@ async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'Invalid or expired authentication token.' });
     }
 
+    // Strict server-side VIT email domain enforcement
+    const userEmail = (decoded.email || '').toLowerCase().trim();
+    if (!userEmail.endsWith('@vitstudent.ac.in')) {
+      return res.status(403).json({
+        error: 'Access restricted: Only valid VIT student accounts (@vitstudent.ac.in) are authorized.'
+      });
+    }
+
     // Attach user info to request
     req.user = {
       uid: decoded.uid,
@@ -71,7 +79,7 @@ async function optionalAuth(req, res, next) {
 
   try {
     const decoded = await firebaseService.verifyToken(token);
-    if (decoded) {
+    if (decoded && (decoded.email || '').toLowerCase().trim().endsWith('@vitstudent.ac.in')) {
       req.user = {
         uid: decoded.uid,
         email: decoded.email,

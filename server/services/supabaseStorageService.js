@@ -89,8 +89,19 @@ async function uploadItemPhoto(buffer, originalFilename, mimeType, userId) {
 
   if (error) {
     console.error('[Supabase Storage] Upload error:', error.message);
-    const err = new Error('Failed to upload item photo to storage.');
-    err.status = 500;
+    const isNetworkOrPaused = error.message && (
+      error.message.includes('fetch failed') ||
+      error.message.includes('ENOTFOUND') ||
+      error.message.includes('timeout') ||
+      error.message.includes('503') ||
+      error.message.includes('network')
+    );
+    const err = new Error(
+      isNetworkOrPaused
+        ? 'Photo storage is temporarily unavailable. Please submit without a photo or try again later.'
+        : 'Failed to upload item photo to storage.'
+    );
+    err.status = isNetworkOrPaused ? 503 : 500;
     throw err;
   }
 
